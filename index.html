@@ -64,6 +64,7 @@ const nm=id=>(profs.find(p=>p.id===id)||{}).name||"";
 const HT={temp:["🌡 Temperature","°F"],weight:["⚖ Weight","kg"],height:["📏 Height","cm"],med:["💊 Medicine",""],sym:["🤒 Symptom",""],doc:["🩺 Doctor visit",""],vac:["💉 Vaccine",""]};
 const hsub=i=>i.sub||(i.num?"temp":"sym");
 const age=d=>{if(!d)return"";const b=new Date(d),n=new Date();let mo=(n.getFullYear()-b.getFullYear())*12+n.getMonth()-b.getMonth();if(n.getDate()<b.getDate())mo--;mo=Math.max(mo,0);return mo<12?mo+" mo":Math.floor(mo/12)+" yrs"};
+const tm=t=>t?new Date(t).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"";
 const kl=k=>k.name+(k.dob?", "+age(k.dob):"");
 const msg=t=>{$("st").textContent=t||""};
 
@@ -105,6 +106,9 @@ function draw(){
  const A=$("app");A.textContent="";$("side").textContent="";const r=role(),al=ALLOW[r];
  const top=el("div");top.append(document.createTextNode((prof?prof.name:"You")+" · "+(r==="admin"?"Admin":ROLES[r])+" · "));
  const so=el("button","link","Sign out");so.onclick=async()=>{prof=null;await sb.auth.signOut()};top.append(so);
+ const cp=el("button","link","Change password");
+ cp.onclick=async()=>{const v=prompt("New password (6+ characters)");if(!v)return;if(v.length<6){msg("Password must be 6+ characters.");return}const{error}=await sb.auth.updateUser({password:v});msg(error?error.message:"Password changed.")};
+ top.append(document.createTextNode(" · "),cp);
  $("who").textContent="";$("who").append(top);
  if(!al.length){A.append(el("div","card","Your account is waiting for approval. Ask the admin to give you a role, then reload."));return}
  if(r==="child"&&prof.kid_id)kid=prof.kid_id;else if(!kids.find(k=>k.id===kid))kid=kids[0]&&kids[0].id;
@@ -148,7 +152,7 @@ function entries(S,F,L,r){
  if(!list.length)L.append(el("div","sub","Nothing yet."));
  list.forEach(i=>{const it=el("div","item"),left=el("div"),t=el("div",null,(tab==="health"?HT[hsub(i)][0]+(i.text?" · ":""):"")+(i.text||(tab==="health"?"":"(no note)")));
   if(tab==="shop"&&i.done)t.style.textDecoration="line-through";
-  left.append(t,el("div","sub",(i.date||"")+(nm(i.by)?" · "+nm(i.by):"")));
+  left.append(t,el("div","sub",(i.date||"")+" · "+(tab==="stars"?"given by ":"by ")+(i.by?(nm(i.by)||"removed user"):"unknown")+" · "+tm(i.created_at)));
   const right=el("div");right.style.cssText="display:flex;align-items:center;gap:4px";
   if(T.sign)right.append(el("b",i.sign==0?"pos":"neg",(i.sign==0?"+":"−")+(tab==="money"?"₹":"")+i.num));
   else if(tab==="shop"){right.append(el("span",null,"₹"+i.num));const c=el("input");c.type="checkbox";c.checked=!!i.done;c.disabled=!(r==="admin"||r==="parent");c.style.cssText="flex:none;width:22px;height:22px";c.onchange=()=>act(sb.from("entries").update({done:c.checked}).eq("id",i.id));right.append(c)}
@@ -185,6 +189,30 @@ function redeem(S,tot){
   if(confirm("Convert "+v+" stars to ₹"+money+"?"))act(sb.from("entries").insert([{kid_id:kid,cat:"stars",sign:1,num:v,text:"Converted to ₹"+money},{kid_id:kid,cat:"money",sign:0,num:money,text:"From "+v+" stars"}]))};
  b.append(n,cb);S.append(b);
 }
+function mkUser(F){
+ const box=el("div","item");box.style.cssText="display:block;border-bottom:2px solid var(--bd);padding-bottom:14px";
+ box.append(el("div",null,"➕ Create a user"));
+ const n=el("input"),e=el("input"),pw=el("input");n.placeholder="Name";e.type="email";e.placeholder="Email (no verification needed)";pw.placeholder="Default password (6+ characters)";
+ [n,e,pw].forEach(i=>{const r=el("div","row");r.append(i);box.append(r)});
+ const r2=el("div","row"),rs=el("select"),ks=el("select");
+ Object.keys(ROLES).filter(k=>k!=="pending").forEach(k=>{const o=el("option",null,ROLES[k]);o.value=k;rs.append(o)});
+ kids.forEach(k=>{const o=el("option",null,kl(k));o.value=k.id;ks.append(o)});
+ const sh=()=>{ks.style.display=rs.value==="child"?"":"none"};rs.value="parent";sh();rs.onchange=sh;r2.append(rs,ks);box.append(r2);
+ const b=el("button","add","Create user");b.style.marginTop="8px";
+ b.onclick=async()=>{const name=n.value.trim(),email=e.value.trim(),pass=pw.value;
+  if(!name||!email||pass.length<6){msg("Enter a name, an email and a password of 6+ characters.");return}
+  busy=true;msg("Creating…");
+  const c=supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false,storageKey:"mt-create"}});
+  const{data,error}=await c.auth.signUp({email,password:pass,options:{data:{name}}});
+  if(error){busy=false;msg(error.message);return}
+  const u=data.user;
+  if(!u||(u.identities&&!u.identities.length)){busy=false;msg("That email is already registered.");return}
+  const up=await sb.from("profiles").update({name,role:rs.value,kid_id:rs.value==="child"?ks.value:null}).eq("id",u.id);
+  busy=false;await load();draw();
+  msg(up.error?up.error.message:"Created "+name+". Give them the email and default password."+(data.session?"":" Turn off Confirm email in Supabase, or they must verify first."));
+ };
+ box.append(b);F.append(box);
+}
 function masterTab(S){
  S.append(el("div","sub","Set up lists once. They appear as dropdowns when adding entries."));
  Object.keys(MK).forEach(k=>{
@@ -194,7 +222,11 @@ function masterTab(S){
    const b=el("button","add","Set");b.onclick=()=>{const val=parseFloat(v.value);if(!(val>0))return;act((async()=>{await sb.from("masters").delete().eq("kind","rate");return sb.from("masters").insert({kind:"rate",name:"₹ per star",value:val})})())};r.append(v,b);S.append(r);return}
   if(!ml.length)S.append(el("div","sub","None yet."));
   ml.forEach(m=>{const it=el("div","item"),l=el("div",null,m.name);if(m.value)l.append(el("span","sub","  "+(k==="item"?"₹":"")+m.value+(k==="reward"?" ⭐":"")));
-   const x=el("button","x","✕");x.onclick=()=>{if(confirm("Remove this?"))act(sb.from("masters").delete().eq("id",m.id))};it.append(l,x);S.append(it)});
+   const x=el("button","x","✕");x.onclick=()=>{if(confirm("Remove this?"))act(sb.from("masters").delete().eq("id",m.id))};const ed=el("button","x","✎");
+   ed.onclick=()=>{const nn=prompt("Name",m.name);if(nn===null)return;const upd={name:nn.trim()||m.name};
+    if(k==="item"||k==="reason"||k==="reward"){const vv=prompt(MK[k][1]||"Value",m.value==null?"":m.value);if(vv===null)return;const num=parseFloat(vv);upd.value=isNaN(num)?null:num}
+    act(sb.from("masters").update(upd).eq("id",m.id))};
+   it.append(l,ed,x);S.append(it)});
   const r=el("div","row"),n=el("input"),v=el("input");n.placeholder="Add name";r.append(n);
   if(k==="item"||k==="reason"||k==="reward"){v.type="number";v.step="any";v.inputMode="decimal";v.placeholder=MK[k][1];r.append(v)}
   const b=el("button","add","Add");b.onclick=()=>{const nv=n.value.trim();if(!nv)return;const val=parseFloat(v.value);act(sb.from("masters").insert({kind:k,name:nv,value:isNaN(val)?null:val}))};
@@ -211,7 +243,7 @@ function people(S,F,L){
  const ki=el("input");ki.placeholder="Add person's name";const kd=el("select");[["child","Child"],["adult","Adult"]].forEach(([v,t])=>{const o=el("option",null,t);o.value=v;kd.append(o)});const dbi=el("input");dbi.type="date";const kb=el("button","add","Add");
  kb.onclick=()=>{const v=ki.value.trim();if(v)act(sb.from("kids").insert({name:v,kind:kd.value,dob:dbi.value||null}))};
  const kr=el("div","row");kr.append(ki,kd,kb);const dr=el("div","row");dr.append(dbi);S.append(kr,el("div","sub","Date of birth (optional)"),dr);
- F.append(el("b",null,"Accounts"),el("div","sub","New people create an account, then you give them a role here."));
+ F.append(el("b",null,"Accounts"));mkUser(F);F.append(el("div","sub","People who sign up themselves wait here for a role."));
  profs.forEach(p=>{
   const self=p.id===me.id,box=el("div","item");box.style.display="block";
   const ni=el("input");ni.value=p.name||"";ni.placeholder="Name";const r1=el("div","row");r1.append(ni);box.append(r1);
