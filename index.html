@@ -54,7 +54,7 @@ const TABS={over:{n:"📊 Overview"},
  masters:{n:"🗂 Masters"},people:{n:"👥 People"}};
 const ROLES={parent:"Parent",teacher:"Teacher / caregiver",child:"Member (own view)",pending:"No access"};
 const KMAP={money:"category",stars:"reason",shop:"item",classes:"class",health:"medicine"};
-const MK={class:["Classes",""],item:["Shopping items","Default price ₹"],reason:["Star reasons","Default stars"],reward:["Star rewards (redeem)","Cost in stars"],rate:["Star → money rate",""],category:["Money categories",""],medicine:["Medicines",""]};
+const MK={class:["Classes",""],item:["Shopping items","Default price ₹"],reason:["Star reasons","Stars (use − to deduct)"],reward:["Star rewards (redeem)","Cost in stars"],rate:["Star → money rate",""],category:["Money categories",""],medicine:["Medicines",""]};
 const ALLOW={admin:["over","money","stars","shop","classes","health","masters","people"],parent:["over","money","stars","shop","classes","health"],teacher:["classes","health"],child:["money","stars"],pending:[]};
 const $=id=>document.getElementById(id);
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
@@ -123,7 +123,7 @@ function overview(S){
 async function act(p){busy=true;msg("Saving…");const{error}=await p;busy=false;if(error)msg(error.message);else{msg("");await load()}draw()}
 function entries(S,F,L,r){
  const T=TABS[tab],list=items.filter(i=>i.cat===tab&&i.kid_id===kid),canAdd=["admin","parent","teacher"].includes(r);
- if(T.sign){const tot=list.reduce((t,i)=>t+i.num*(i.sign==0?1:-1),0);S.append(el("div","sub",tab==="money"?"Balance":"Total stars"),el("div","big",(tab==="money"?"₹":"")+tot.toFixed(tab==="money"?2:0)))}
+ if(T.sign){const tot=list.reduce((t,i)=>t+i.num*(i.sign==0?1:-1),0);S.append(el("div","sub",tab==="money"?"Balance":"Total stars"),el("div","big"+(tot<0?" neg":""),(tab==="money"?"₹":"")+tot.toFixed(tab==="money"?2:0)))}
  else if(tab==="shop")S.append(el("div","sub","Spent so far"),el("div","big","₹"+list.filter(i=>i.done).reduce((t,i)=>t+i.num,0).toFixed(2)));
  else if(tab==="health")healthSummary(S,list);
  else S.append(el("div","sub","Entries"),el("div","big",list.length));
@@ -142,7 +142,7 @@ function entries(S,F,L,r){
   const ml=masters.filter(m=>m.kind===KMAP[tab]);let pm;
   if(ml.length){pm=el("select");const o0=el("option",null,"Pick from list…");o0.value="";pm.append(o0);
    ml.forEach(m=>{const o=el("option",null,m.name+(m.value?" ("+(tab==="shop"?"₹":"")+m.value+")":""));o.value=m.id;pm.append(o)});
-   pm.onchange=()=>{const m=ml.find(x=>x.id===pm.value);if(m){txt.value=m.name;if(num&&m.value)num.value=m.value}}}
+   pm.onchange=()=>{const m=ml.find(x=>x.id===pm.value);if(m){txt.value=m.name;if(num&&m.value)num.value=Math.abs(m.value);if(sg&&tab==="stars")sg.value=m.value<0?1:0}}}
   if(hs){hs.onchange=()=>{const u=HT[hs.value][1];num.style.display=u?"":"none";num.placeholder=u?"Value ("+u+")":"";num.value="";if(pm)pm.style.display=hs.value==="med"?"":"none"};hs.onchange();F.append(r0)}
   if(pm)F.append(pm);F.append(r1,r2)}
  if(!list.length)L.append(el("div","sub","Nothing yet."));
