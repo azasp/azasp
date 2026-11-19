@@ -63,6 +63,8 @@ const role=()=>prof?prof.role:"pending";
 const nm=id=>(profs.find(p=>p.id===id)||{}).name||"";
 const HT={temp:["🌡 Temperature","°F"],weight:["⚖ Weight","kg"],height:["📏 Height","cm"],med:["💊 Medicine",""],sym:["🤒 Symptom",""],doc:["🩺 Doctor visit",""],vac:["💉 Vaccine",""]};
 const hsub=i=>i.sub||(i.num?"temp":"sym");
+const age=d=>{if(!d)return"";const b=new Date(d),n=new Date();let mo=(n.getFullYear()-b.getFullYear())*12+n.getMonth()-b.getMonth();if(n.getDate()<b.getDate())mo--;mo=Math.max(mo,0);return mo<12?mo+" mo":Math.floor(mo/12)+" yrs"};
+const kl=k=>k.name+(k.dob?", "+age(k.dob):"");
 const msg=t=>{$("st").textContent=t||""};
 
 async function init(){
@@ -109,14 +111,14 @@ function draw(){
  if(!al.includes(tab))tab=al[0];
  const sd=$("side");$("mb").style.display="";
  al.forEach(k=>{const b=el("button",k===tab?"on":"",TABS[k].n);b.onclick=()=>{tab=k;sd.classList.remove("open");$("ov").classList.remove("show");draw()};sd.append(b)});
- if(r!=="child"&&kids.length>1&&tab!=="over"&&tab!=="people"&&tab!=="masters"){const s=el("select");kids.forEach(k=>{const o=el("option",null,k.name);o.value=k.id;s.append(o)});s.value=kid;s.style.width="100%";s.onchange=()=>{kid=s.value;draw()};A.append(s)}
+ if(r!=="child"&&kids.length>1&&tab!=="over"&&tab!=="people"&&tab!=="masters"){const s=el("select");kids.forEach(k=>{const o=el("option",null,kl(k));o.value=k.id;s.append(o)});s.value=kid;s.style.width="100%";s.onchange=()=>{kid=s.value;draw()};A.append(s)}
  const S=el("div","card"),F=el("div","card"),L=el("div","card");
  if(tab==="over")overview(S);else if(tab==="people")people(S,F,L);else if(tab==="masters")masterTab(S);else entries(S,F,L,r);
  [S,F,L].forEach(x=>{if(x.childNodes.length)A.append(x)});
 }
 function overview(S){
  kids.forEach(k=>{const t=stats(k.id),c=el("div","item"),l=el("div");
-  l.append(el("b",null,k.name),el("div","sub","Balance ₹"+t.bal.toFixed(2)+" · Stars "+t.st+" · Spent ₹"+t.spent.toFixed(2)+" · Temp "+(t.temp?t.temp+"°F":"—")));c.append(l);S.append(c)});
+  l.append(el("b",null,kl(k)),el("div","sub","Balance ₹"+t.bal.toFixed(2)+" · Stars "+t.st+" · Spent ₹"+t.spent.toFixed(2)+" · Temp "+(t.temp?t.temp+"°F":"—")));c.append(l);S.append(c)});
 }
 async function act(p){busy=true;msg("Saving…");const{error}=await p;busy=false;if(error)msg(error.message);else{msg("");await load()}draw()}
 function entries(S,F,L,r){
@@ -200,13 +202,15 @@ function masterTab(S){
 }
 function people(S,F,L){
  S.append(el("b",null,"Family members"));
- kids.forEach(k=>{const it=el("div","item",k.name+(k.kind==="adult"?" (adult)":" (child)")),ed=el("button","x","✎");
+ kids.forEach(k=>{const it=el("div","item",kl(k)+(k.kind==="adult"?" (adult)":" (child)")),ed=el("button","x","✎");
   ed.onclick=()=>{const v=prompt("Rename",k.name);if(v&&v.trim())act(sb.from("kids").update({name:v.trim()}).eq("id",k.id))};const dl=el("button","x","✕");
   dl.onclick=()=>{if(kids.length<2){msg("You need at least one person.");return}if(prompt('This permanently deletes "'+k.name+'" and ALL their entries. Type DELETE to confirm.')==="DELETE")act(sb.from("kids").delete().eq("id",k.id))};
-  it.append(ed,dl);S.append(it)});
- const ki=el("input");ki.placeholder="Add person's name";const kd=el("select");[["child","Child"],["adult","Adult"]].forEach(([v,t])=>{const o=el("option",null,t);o.value=v;kd.append(o)});const kb=el("button","add","Add");
- kb.onclick=()=>{const v=ki.value.trim();if(v)act(sb.from("kids").insert({name:v,kind:kd.value}))};
- const kr=el("div","row");kr.append(ki,kd,kb);S.append(kr);
+  const bd=el("button","x","🎂");
+  bd.onclick=()=>{const v=prompt("Date of birth (YYYY-MM-DD). Leave empty to clear.",k.dob||"");if(v===null)return;const t=v.trim();if(t&&!/^\d{4}-\d{2}-\d{2}$/.test(t)){msg("Use the format YYYY-MM-DD");return}act(sb.from("kids").update({dob:t||null}).eq("id",k.id))};
+  it.append(ed,bd,dl);S.append(it)});
+ const ki=el("input");ki.placeholder="Add person's name";const kd=el("select");[["child","Child"],["adult","Adult"]].forEach(([v,t])=>{const o=el("option",null,t);o.value=v;kd.append(o)});const dbi=el("input");dbi.type="date";const kb=el("button","add","Add");
+ kb.onclick=()=>{const v=ki.value.trim();if(v)act(sb.from("kids").insert({name:v,kind:kd.value,dob:dbi.value||null}))};
+ const kr=el("div","row");kr.append(ki,kd,kb);const dr=el("div","row");dr.append(dbi);S.append(kr,el("div","sub","Date of birth (optional)"),dr);
  F.append(el("b",null,"Accounts"),el("div","sub","New people create an account, then you give them a role here."));
  profs.forEach(p=>{
   const self=p.id===me.id,box=el("div","item");box.style.display="block";
