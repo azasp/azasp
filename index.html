@@ -41,10 +41,9 @@ input,select{flex:1;min-width:0;padding:10px;border:1px solid var(--bd);border-r
 <div class="shell"><aside id="side"></aside><div id="ov"></div>
 <main><div id="who"></div><div id="app"></div><div id="st"></div></main></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
 <script>
-// 1) Paste your Supabase values here (Project Settings > API):
-const SUPABASE_URL="https://flkbctstpgsllyvunihm.supabase.co";
-const SUPABASE_KEY="sb_publishable_8ThF0OCvQWoCLTUWHpwqTw_Reryf7p3";
+// SUPABASE_URL and SUPABASE_KEY now come from config.js
 
 const TABS={over:{n:"📊 Overview"},
  money:{n:"💰 Money",num:"Amount ₹",txt:"Note (allowance, toy…)",sign:["Add","Spend"]},
@@ -55,7 +54,7 @@ const TABS={over:{n:"📊 Overview"},
  masters:{n:"🗂 Masters"},people:{n:"👥 People"}};
 const ROLES={parent:"Parent",teacher:"Teacher / caregiver",child:"Member (own view)",pending:"No access"};
 const KMAP={money:"category",stars:"reason",shop:"item",classes:"class",health:"medicine"};
-const MK={class:["Classes",""],item:["Shopping items","Default price ₹"],reason:["Star reasons","Default stars"],category:["Money categories",""],medicine:["Medicines",""]};
+const MK={class:["Classes",""],item:["Shopping items","Default price ₹"],reason:["Star reasons","Default stars"],reward:["Star rewards (redeem)","Cost in stars"],rate:["Star → money rate",""],category:["Money categories",""],medicine:["Medicines",""]};
 const ALLOW={admin:["over","money","stars","shop","classes","health","masters","people"],parent:["over","money","stars","shop","classes","health"],teacher:["classes","health"],child:["money","stars"],pending:[]};
 const $=id=>document.getElementById(id);
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
@@ -67,7 +66,7 @@ const hsub=i=>i.sub||(i.num?"temp":"sym");
 const msg=t=>{$("st").textContent=t||""};
 
 async function init(){
- if(SUPABASE_URL.startsWith("PASTE")){$("app").append(el("div","card","Add your Supabase URL and key at the top of index.html."));return}
+ if(typeof SUPABASE_URL==="undefined"||SUPABASE_URL.startsWith("PASTE")){$("app").append(el("div","card","Add your Supabase URL and key in config.js."));return}
  sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
  sb.auth.onAuthStateChange((ev,s)=>{if(ev==="SIGNED_IN"||ev==="SIGNED_OUT")start()});
  start();
@@ -126,6 +125,7 @@ function entries(S,F,L,r){
  else if(tab==="shop")S.append(el("div","sub","Spent so far"),el("div","big","₹"+list.filter(i=>i.done).reduce((t,i)=>t+i.num,0).toFixed(2)));
  else if(tab==="health")healthSummary(S,list);
  else S.append(el("div","sub","Entries"),el("div","big",list.length));
+ if(tab==="stars"&&(r==="admin"||r==="parent"))redeem(S,list.reduce((t,i)=>t+i.num*(i.sign==0?1:-1),0));
  if(canAdd){
   let hs,r0;if(tab==="health"){hs=el("select");Object.keys(HT).forEach(k=>{const o=el("option",null,HT[k][0]);o.value=k;hs.append(o)});r0=el("div","row");r0.append(hs)}
   const txt=el("input");txt.placeholder=T.txt;const r1=el("div","row");r1.append(txt);
@@ -167,23 +167,43 @@ function healthSummary(S,list){
   const pl=document.createElementNS(ns,"polyline");[["points",ts.map((i,k)=>X(k)+","+Y(i.num)).join(" ")],["fill","none"],["stroke","#e8a200"],["stroke-width","2.5"]].forEach(([a,b])=>pl.setAttribute(a,b));
   sv.append(f,pl);S.append(sv,el("div","sub","Temperature trend (dashed line = 100.4°F)"))}
 }
+function redeem(S,tot){
+ const rate=(masters.find(m=>m.kind==="rate")||{}).value,rw=masters.filter(m=>m.kind==="reward");
+ const h=el("b",null,"Redeem stars");h.style.cssText="display:block;margin-top:14px";S.append(h);
+ const a=el("div","row"),rs=el("select"),o0=el("option",null,rw.length?"Pick a reward…":"No rewards yet (add in Masters)");o0.value="";rs.append(o0);
+ rw.forEach(m=>{const o=el("option",null,m.name+" — "+m.value+" ⭐");o.value=m.id;rs.append(o)});
+ const rb=el("button","add","Redeem");
+ rb.onclick=()=>{const m=rw.find(x=>x.id===rs.value);if(!m)return;if(m.value>tot){msg("Not enough stars ("+tot+" available).");return}
+  if(confirm("Redeem "+m.name+" for "+m.value+" stars?"))act(sb.from("entries").insert({kid_id:kid,cat:"stars",sign:1,num:m.value,text:"Redeemed: "+m.name}))};
+ a.append(rs,rb);S.append(a);
+ const b=el("div","row"),n=el("input");n.type="number";n.min="1";n.step="1";n.inputMode="numeric";n.placeholder=rate?"Stars to convert (₹"+rate+" each)":"Set the rate in Masters first";
+ const cb=el("button","add","Convert to ₹");
+ cb.onclick=()=>{const v=parseFloat(n.value);if(!rate||!(v>0))return;if(v>tot){msg("Not enough stars ("+tot+" available).");return}
+  const money=Math.round(v*rate*100)/100;
+  if(confirm("Convert "+v+" stars to ₹"+money+"?"))act(sb.from("entries").insert([{kid_id:kid,cat:"stars",sign:1,num:v,text:"Converted to ₹"+money},{kid_id:kid,cat:"money",sign:0,num:money,text:"From "+v+" stars"}]))};
+ b.append(n,cb);S.append(b);
+}
 function masterTab(S){
  S.append(el("div","sub","Set up lists once. They appear as dropdowns when adding entries."));
  Object.keys(MK).forEach(k=>{
   const h=el("b",null,MK[k][0]);h.style.cssText="display:block;margin-top:14px";S.append(h);
   const ml=masters.filter(m=>m.kind===k);
+  if(k==="rate"){const cur=ml[0];S.append(el("div","sub",cur?"Current: ₹"+cur.value+" per star":"Not set yet"));const r=el("div","row"),v=el("input");v.type="number";v.step="any";v.inputMode="decimal";v.placeholder="₹ per star";
+   const b=el("button","add","Set");b.onclick=()=>{const val=parseFloat(v.value);if(!(val>0))return;act((async()=>{await sb.from("masters").delete().eq("kind","rate");return sb.from("masters").insert({kind:"rate",name:"₹ per star",value:val})})())};r.append(v,b);S.append(r);return}
   if(!ml.length)S.append(el("div","sub","None yet."));
-  ml.forEach(m=>{const it=el("div","item"),l=el("div",null,m.name);if(m.value)l.append(el("span","sub","  "+(k==="item"?"₹":"")+m.value));
+  ml.forEach(m=>{const it=el("div","item"),l=el("div",null,m.name);if(m.value)l.append(el("span","sub","  "+(k==="item"?"₹":"")+m.value+(k==="reward"?" ⭐":"")));
    const x=el("button","x","✕");x.onclick=()=>{if(confirm("Remove this?"))act(sb.from("masters").delete().eq("id",m.id))};it.append(l,x);S.append(it)});
   const r=el("div","row"),n=el("input"),v=el("input");n.placeholder="Add name";r.append(n);
-  if(k==="item"||k==="reason"){v.type="number";v.step="any";v.inputMode="decimal";v.placeholder=MK[k][1];r.append(v)}
+  if(k==="item"||k==="reason"||k==="reward"){v.type="number";v.step="any";v.inputMode="decimal";v.placeholder=MK[k][1];r.append(v)}
   const b=el("button","add","Add");b.onclick=()=>{const nv=n.value.trim();if(!nv)return;const val=parseFloat(v.value);act(sb.from("masters").insert({kind:k,name:nv,value:isNaN(val)?null:val}))};
   r.append(b);S.append(r)});
 }
 function people(S,F,L){
  S.append(el("b",null,"Family members"));
  kids.forEach(k=>{const it=el("div","item",k.name+(k.kind==="adult"?" (adult)":" (child)")),ed=el("button","x","✎");
-  ed.onclick=()=>{const v=prompt("Rename",k.name);if(v&&v.trim())act(sb.from("kids").update({name:v.trim()}).eq("id",k.id))};it.append(ed);S.append(it)});
+  ed.onclick=()=>{const v=prompt("Rename",k.name);if(v&&v.trim())act(sb.from("kids").update({name:v.trim()}).eq("id",k.id))};const dl=el("button","x","✕");
+  dl.onclick=()=>{if(kids.length<2){msg("You need at least one person.");return}if(prompt('This permanently deletes "'+k.name+'" and ALL their entries. Type DELETE to confirm.')==="DELETE")act(sb.from("kids").delete().eq("id",k.id))};
+  it.append(ed,dl);S.append(it)});
  const ki=el("input");ki.placeholder="Add person's name";const kd=el("select");[["child","Child"],["adult","Adult"]].forEach(([v,t])=>{const o=el("option",null,t);o.value=v;kd.append(o)});const kb=el("button","add","Add");
  kb.onclick=()=>{const v=ki.value.trim();if(v)act(sb.from("kids").insert({name:v,kind:kd.value}))};
  const kr=el("div","row");kr.append(ki,kd,kb);S.append(kr);
