@@ -2,11 +2,25 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#e8a200">
-<title>Kid Tracker</title>
+<title>MyTracker</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MyTracker">
 <style>
 :root{--bg:#f7f6f2;--card:#fff;--tx:#222;--mut:#777;--ac:#e8a200;--bd:#e3e0d8;--red:#c0392b;--grn:#2e8b57}
 @media (prefers-color-scheme:dark){:root{--bg:#17171a;--card:#232328;--tx:#eee;--mut:#9a9aa3;--bd:#34343b;--red:#e86a5a;--grn:#5fcf92}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px system-ui,sans-serif;max-width:560px;margin:auto;padding:12px;padding-top:max(12px,env(safe-area-inset-top));padding-bottom:max(12px,env(safe-area-inset-bottom))}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:16px system-ui,sans-serif;padding-bottom:env(safe-area-inset-bottom)}
+.top{display:flex;align-items:center;gap:10px;padding:10px 14px;padding-top:max(10px,env(safe-area-inset-top));position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid var(--bd)}
+.top h1{margin:0}
+#mb{background:var(--card);border:1px solid var(--bd);color:var(--tx);border-radius:8px;font-size:20px;padding:4px 10px}
+.shell{display:flex;align-items:flex-start}
+aside{width:220px;flex:none;padding:12px;border-right:1px solid var(--bd);position:sticky;top:57px;min-height:calc(100vh - 57px)}
+aside:empty{display:none}
+aside button{display:block;width:100%;text-align:left;padding:11px 12px;margin-bottom:4px;border:0;background:none;color:var(--tx);border-radius:10px;font-size:16px}
+aside button.on{background:var(--ac);color:#000;font-weight:600}
+main{flex:1;min-width:0;padding:12px;max-width:760px}
+#ov{display:none}
+@media(max-width:799px){aside{position:fixed;left:0;top:0;bottom:0;z-index:20;background:var(--card);transform:translateX(-100%);transition:transform .2s;padding-top:max(16px,env(safe-area-inset-top));width:250px;min-height:0}aside.open{transform:none}#ov.show{display:block;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:15}}
+@media(min-width:800px){#mb{display:none}}
 h1{font-size:20px;margin:4px 0 2px}
 nav{display:flex;gap:6px;overflow-x:auto;padding:8px 0 6px}
 nav button{flex:none;padding:8px 12px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:20px;font-size:15px}
@@ -23,10 +37,9 @@ input,select{flex:1;min-width:0;padding:10px;border:1px solid var(--bd);border-r
 #st,#who{color:var(--mut);font-size:13px;margin-top:6px}
 .link{background:none;border:0;color:var(--mut);text-decoration:underline;font-size:13px;padding:0}
 </style></head><body>
-<h1>⭐ Kid Tracker</h1>
-<div id="who"></div>
-<div id="app"></div>
-<div id="st"></div>
+<header class="top"><button id="mb" aria-label="Menu">☰</button><h1>⭐ MyTracker</h1></header>
+<div class="shell"><aside id="side"></aside><div id="ov"></div>
+<main><div id="who"></div><div id="app"></div><div id="st"></div></main></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script>
 // 1) Paste your Supabase values here (Project Settings > API):
@@ -39,14 +52,18 @@ const TABS={over:{n:"📊 Overview"},
  shop:{n:"🛍 Shopping",num:"Price ₹",txt:"Item"},
  classes:{n:"📚 Classes",txt:"Class & activity / homework"},
  health:{n:"🌡 Health",num:"Temp °F",txt:"Symptoms / medicine / note"},
- people:{n:"👥 People"}};
-const ROLES={parent:"Parent",teacher:"Teacher / caregiver",child:"Child",pending:"No access"};
-const ALLOW={admin:["over","money","stars","shop","classes","health","people"],parent:["over","money","stars","shop","classes","health"],teacher:["classes","health"],child:["money","stars"],pending:[]};
+ masters:{n:"🗂 Masters"},people:{n:"👥 People"}};
+const ROLES={parent:"Parent",teacher:"Teacher / caregiver",child:"Member (own view)",pending:"No access"};
+const KMAP={money:"category",stars:"reason",shop:"item",classes:"class",health:"medicine"};
+const MK={class:["Classes",""],item:["Shopping items","Default price ₹"],reason:["Star reasons","Default stars"],category:["Money categories",""],medicine:["Medicines",""]};
+const ALLOW={admin:["over","money","stars","shop","classes","health","masters","people"],parent:["over","money","stars","shop","classes","health"],teacher:["classes","health"],child:["money","stars"],pending:[]};
 const $=id=>document.getElementById(id);
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
-let sb,me,prof,kids=[],items=[],profs=[],tab="",kid=null,busy=false;
+let sb,me,prof,masters=[],kids=[],items=[],profs=[],tab="",kid=null,busy=false;
 const role=()=>prof?prof.role:"pending";
 const nm=id=>(profs.find(p=>p.id===id)||{}).name||"";
+const HT={temp:["🌡 Temperature","°F"],weight:["⚖ Weight","kg"],height:["📏 Height","cm"],med:["💊 Medicine",""],sym:["🤒 Symptom",""],doc:["🩺 Doctor visit",""],vac:["💉 Vaccine",""]};
+const hsub=i=>i.sub||(i.num?"temp":"sym");
 const msg=t=>{$("st").textContent=t||""};
 
 async function init(){
@@ -62,13 +79,13 @@ async function start(){
  me=session.user;await load();draw();
 }
 async function load(){
- const[k,e,p]=await Promise.all([sb.from("kids").select("*").order("created_at"),sb.from("entries").select("*").order("created_at",{ascending:false}),sb.from("profiles").select("*")]);
- if(k.error||e.error||p.error)msg("Could not load data: "+((k.error||e.error||p.error).message));
- kids=k.data||[];items=e.data||[];profs=p.data||[];prof=profs.find(x=>x.id===me.id)||null;
+ const[k,e,p,m]=await Promise.all([sb.from("kids").select("*").order("created_at"),sb.from("entries").select("*").order("created_at",{ascending:false}),sb.from("profiles").select("*"),sb.from("masters").select("*").order("name")]);
+ if(k.error||e.error||p.error||m.error)msg("Could not load data: "+((k.error||e.error||p.error||m.error).message));
+ kids=k.data||[];items=e.data||[];profs=p.data||[];masters=m.data||[];prof=profs.find(x=>x.id===me.id)||null;
  if(prof&&prof.role==="admin"&&!kids.length){await sb.from("kids").insert({name:"My child"});const r=await sb.from("kids").select("*");kids=r.data||[]}
 }
 function login(){
- $("who").textContent="";const A=$("app");A.textContent="";
+ $("who").textContent="";$("side").textContent="";$("mb").style.display="none";const A=$("app");A.textContent="";
  const c=el("div","card"),em=el("input"),pw=el("input"),nmI=el("input");
  em.type="email";em.placeholder="Email";em.autocomplete="email";pw.type="password";pw.placeholder="Password (6+ characters)";nmI.placeholder="Your name (for new accounts)";
  const b1=el("button","add","Sign in"),b2=el("button","add","Create account");b2.style.background="var(--bd)";b2.style.color="var(--tx)";
@@ -81,20 +98,21 @@ function login(){
 }
 function stats(k){const l=items.filter(i=>i.kid_id===k),s=c=>l.filter(i=>i.cat===c);
  const sg=a=>a.reduce((t,i)=>t+i.num*(i.sign==0?1:-1),0);
- return{bal:sg(s("money")),st:sg(s("stars")),spent:s("shop").filter(i=>i.done).reduce((t,i)=>t+i.num,0),temp:(s("health")[0]||{}).num}}
+ return{bal:sg(s("money")),st:sg(s("stars")),spent:s("shop").filter(i=>i.done).reduce((t,i)=>t+i.num,0),temp:(s("health").find(i=>hsub(i)==="temp"&&i.num)||{}).num}}
 function draw(){
  if(busy)return;
- const A=$("app");A.textContent="";const r=role(),al=ALLOW[r];
+ const A=$("app");A.textContent="";$("side").textContent="";const r=role(),al=ALLOW[r];
  const top=el("div");top.append(document.createTextNode((prof?prof.name:"You")+" · "+(r==="admin"?"Admin":ROLES[r])+" · "));
  const so=el("button","link","Sign out");so.onclick=async()=>{prof=null;await sb.auth.signOut()};top.append(so);
  $("who").textContent="";$("who").append(top);
  if(!al.length){A.append(el("div","card","Your account is waiting for approval. Ask the admin to give you a role, then reload."));return}
  if(r==="child"&&prof.kid_id)kid=prof.kid_id;else if(!kids.find(k=>k.id===kid))kid=kids[0]&&kids[0].id;
  if(!al.includes(tab))tab=al[0];
- const n=el("nav");al.forEach(k=>{const b=el("button",k===tab?"on":"",TABS[k].n);b.onclick=()=>{tab=k;draw()};n.append(b)});A.append(n);
- if(r!=="child"&&kids.length>1&&tab!=="over"&&tab!=="people"){const s=el("select");kids.forEach(k=>{const o=el("option",null,k.name);o.value=k.id;s.append(o)});s.value=kid;s.style.width="100%";s.onchange=()=>{kid=s.value;draw()};A.append(s)}
+ const sd=$("side");$("mb").style.display="";
+ al.forEach(k=>{const b=el("button",k===tab?"on":"",TABS[k].n);b.onclick=()=>{tab=k;sd.classList.remove("open");$("ov").classList.remove("show");draw()};sd.append(b)});
+ if(r!=="child"&&kids.length>1&&tab!=="over"&&tab!=="people"&&tab!=="masters"){const s=el("select");kids.forEach(k=>{const o=el("option",null,k.name);o.value=k.id;s.append(o)});s.value=kid;s.style.width="100%";s.onchange=()=>{kid=s.value;draw()};A.append(s)}
  const S=el("div","card"),F=el("div","card"),L=el("div","card");
- if(tab==="over")overview(S);else if(tab==="people")people(S,F,L);else entries(S,F,L,r);
+ if(tab==="over")overview(S);else if(tab==="people")people(S,F,L);else if(tab==="masters")masterTab(S);else entries(S,F,L,r);
  [S,F,L].forEach(x=>{if(x.childNodes.length)A.append(x)});
 }
 function overview(S){
@@ -106,9 +124,10 @@ function entries(S,F,L,r){
  const T=TABS[tab],list=items.filter(i=>i.cat===tab&&i.kid_id===kid),canAdd=["admin","parent","teacher"].includes(r);
  if(T.sign){const tot=list.reduce((t,i)=>t+i.num*(i.sign==0?1:-1),0);S.append(el("div","sub",tab==="money"?"Balance":"Total stars"),el("div","big",(tab==="money"?"₹":"")+tot.toFixed(tab==="money"?2:0)))}
  else if(tab==="shop")S.append(el("div","sub","Spent so far"),el("div","big","₹"+list.filter(i=>i.done).reduce((t,i)=>t+i.num,0).toFixed(2)));
- else if(tab==="health"){const l=list[0];S.append(el("div","sub","Last temperature"),el("div","big",l&&l.num?l.num+"°F":"—"))}
+ else if(tab==="health")healthSummary(S,list);
  else S.append(el("div","sub","Entries"),el("div","big",list.length));
  if(canAdd){
+  let hs,r0;if(tab==="health"){hs=el("select");Object.keys(HT).forEach(k=>{const o=el("option",null,HT[k][0]);o.value=k;hs.append(o)});r0=el("div","row");r0.append(hs)}
   const txt=el("input");txt.placeholder=T.txt;const r1=el("div","row");r1.append(txt);
   const r2=el("div","row");let num,sg;
   if(T.num){num=el("input");num.type="number";num.step="any";num.inputMode="decimal";num.placeholder=T.num;r2.append(num)}
@@ -116,34 +135,74 @@ function entries(S,F,L,r){
   const dt=el("input");dt.type="date";dt.value=new Date().toISOString().slice(0,10);r2.append(dt);
   const ad=el("button","add","Add");
   ad.onclick=()=>{const v=num?parseFloat(num.value):0;if(!txt.value.trim()&&!(num&&!isNaN(v)))return;
-   act(sb.from("entries").insert({kid_id:kid,cat:tab,text:txt.value.trim(),num:isNaN(v)?0:v,sign:sg?+sg.value:0,date:dt.value}))};
-  r2.append(ad);F.append(r1,r2)}
+   act(sb.from("entries").insert({kid_id:kid,cat:tab,sub:hs?hs.value:null,text:txt.value.trim(),num:isNaN(v)?0:v,sign:sg?+sg.value:0,date:dt.value}))};
+  r2.append(ad);
+  const ml=masters.filter(m=>m.kind===KMAP[tab]);let pm;
+  if(ml.length){pm=el("select");const o0=el("option",null,"Pick from list…");o0.value="";pm.append(o0);
+   ml.forEach(m=>{const o=el("option",null,m.name+(m.value?" ("+(tab==="shop"?"₹":"")+m.value+")":""));o.value=m.id;pm.append(o)});
+   pm.onchange=()=>{const m=ml.find(x=>x.id===pm.value);if(m){txt.value=m.name;if(num&&m.value)num.value=m.value}}}
+  if(hs){hs.onchange=()=>{const u=HT[hs.value][1];num.style.display=u?"":"none";num.placeholder=u?"Value ("+u+")":"";num.value="";if(pm)pm.style.display=hs.value==="med"?"":"none"};hs.onchange();F.append(r0)}
+  if(pm)F.append(pm);F.append(r1,r2)}
  if(!list.length)L.append(el("div","sub","Nothing yet."));
- list.forEach(i=>{const it=el("div","item"),left=el("div"),t=el("div",null,i.text||"(no note)");
+ list.forEach(i=>{const it=el("div","item"),left=el("div"),t=el("div",null,(tab==="health"?HT[hsub(i)][0]+(i.text?" · ":""):"")+(i.text||(tab==="health"?"":"(no note)")));
   if(tab==="shop"&&i.done)t.style.textDecoration="line-through";
   left.append(t,el("div","sub",(i.date||"")+(nm(i.by)?" · "+nm(i.by):"")));
   const right=el("div");right.style.cssText="display:flex;align-items:center;gap:4px";
   if(T.sign)right.append(el("b",i.sign==0?"pos":"neg",(i.sign==0?"+":"−")+(tab==="money"?"₹":"")+i.num));
   else if(tab==="shop"){right.append(el("span",null,"₹"+i.num));const c=el("input");c.type="checkbox";c.checked=!!i.done;c.disabled=!(r==="admin"||r==="parent");c.style.cssText="flex:none;width:22px;height:22px";c.onchange=()=>act(sb.from("entries").update({done:c.checked}).eq("id",i.id));right.append(c)}
-  else if(tab==="health"&&i.num)right.append(el("b",i.num>=100.4?"fever":null,i.num+"°F"));
+  else if(tab==="health"){const u=hsub(i);if(i.num)right.append(el("b",u==="temp"&&i.num>=100.4?"fever":null,i.num+" "+HT[u][1]))}
   if(r==="admin"){const x=el("button","x","✕");x.onclick=()=>{if(confirm("Delete this entry?"))act(sb.from("entries").delete().eq("id",i.id))};right.append(x)}
   it.append(left,right);L.append(it)});
 }
-function people(S,F,L){
- S.append(el("b",null,"Children"));
- kids.forEach(k=>S.append(el("div","item",k.name)));
- const ki=el("input");ki.placeholder="Add child name";const kb=el("button","add","Add");
- kb.onclick=()=>{const v=ki.value.trim();if(v)act(sb.from("kids").insert({name:v}))};
- const kr=el("div","row");kr.append(ki,kb);S.append(kr);
- F.append(el("b",null,"Accounts"),el("div","sub","New people create an account, then you give them a role here."));
- profs.filter(p=>p.id!==me.id).forEach(p=>{
-  const box=el("div","item");box.style.display="block";box.append(el("div",null,p.name||"New user"));
-  const row=el("div","row"),rs=el("select");Object.keys(ROLES).forEach(k=>{const o=el("option",null,ROLES[k]);o.value=k;rs.append(o)});rs.value=p.role==="admin"?"parent":p.role;
-  const ks=el("select");kids.forEach(k=>{const o=el("option",null,k.name);o.value=k.id;ks.append(o)});ks.value=p.kid_id||(kids[0]&&kids[0].id)||"";
-  const sh=()=>{ks.style.display=rs.value==="child"?"":"none"};sh();rs.onchange=sh;
-  const sv=el("button","add","Save");sv.onclick=()=>act(sb.from("profiles").update({role:rs.value,kid_id:rs.value==="child"?ks.value:null}).eq("id",p.id));
-  row.append(rs,ks,sv);box.append(row);F.append(box)});
+function healthSummary(S,list){
+ const last=k=>list.find(i=>hsub(i)===k&&(k==="doc"||k==="vac"||i.num));
+ const t=last("temp"),w=last("weight"),h=last("height"),d=last("doc"),v=last("vac");
+ const g=el("div");g.style.cssText="display:grid;grid-template-columns:1fr 1fr;gap:10px";
+ [["Last temp",t&&t.num+"°F",t&&t.num>=100.4],["Weight",w&&w.num+" kg"],["Height",h&&h.num+" cm"],["Last doctor visit",d&&d.date],["Last vaccine",v&&(v.text||v.date)]].forEach(([a,b,f])=>{const c=el("div");c.append(el("div","sub",a),el("div",f?"fever":null,b||"—"));c.lastChild.style.fontSize="18px";g.append(c)});
+ S.append(g);
+ const ts=list.filter(i=>hsub(i)==="temp"&&i.num).slice(0,14).reverse();
+ if(ts.length>1){const ns="http://www.w3.org/2000/svg",sv=document.createElementNS(ns,"svg");sv.setAttribute("viewBox","0 0 300 70");sv.style.cssText="width:100%;margin-top:10px";
+  const lo=Math.min(97,...ts.map(i=>i.num)),hi=Math.max(101,...ts.map(i=>i.num)),Y=q=>65-(q-lo)/(hi-lo)*60,X=k=>10+k*280/(ts.length-1);
+  const f=document.createElementNS(ns,"line");[["x1",0],["x2",300],["y1",Y(100.4)],["y2",Y(100.4)],["stroke","#c0392b"],["stroke-dasharray","4 4"]].forEach(([a,b])=>f.setAttribute(a,b));
+  const pl=document.createElementNS(ns,"polyline");[["points",ts.map((i,k)=>X(k)+","+Y(i.num)).join(" ")],["fill","none"],["stroke","#e8a200"],["stroke-width","2.5"]].forEach(([a,b])=>pl.setAttribute(a,b));
+  sv.append(f,pl);S.append(sv,el("div","sub","Temperature trend (dashed line = 100.4°F)"))}
 }
+function masterTab(S){
+ S.append(el("div","sub","Set up lists once. They appear as dropdowns when adding entries."));
+ Object.keys(MK).forEach(k=>{
+  const h=el("b",null,MK[k][0]);h.style.cssText="display:block;margin-top:14px";S.append(h);
+  const ml=masters.filter(m=>m.kind===k);
+  if(!ml.length)S.append(el("div","sub","None yet."));
+  ml.forEach(m=>{const it=el("div","item"),l=el("div",null,m.name);if(m.value)l.append(el("span","sub","  "+(k==="item"?"₹":"")+m.value));
+   const x=el("button","x","✕");x.onclick=()=>{if(confirm("Remove this?"))act(sb.from("masters").delete().eq("id",m.id))};it.append(l,x);S.append(it)});
+  const r=el("div","row"),n=el("input"),v=el("input");n.placeholder="Add name";r.append(n);
+  if(k==="item"||k==="reason"){v.type="number";v.step="any";v.inputMode="decimal";v.placeholder=MK[k][1];r.append(v)}
+  const b=el("button","add","Add");b.onclick=()=>{const nv=n.value.trim();if(!nv)return;const val=parseFloat(v.value);act(sb.from("masters").insert({kind:k,name:nv,value:isNaN(val)?null:val}))};
+  r.append(b);S.append(r)});
+}
+function people(S,F,L){
+ S.append(el("b",null,"Family members"));
+ kids.forEach(k=>{const it=el("div","item",k.name+(k.kind==="adult"?" (adult)":" (child)")),ed=el("button","x","✎");
+  ed.onclick=()=>{const v=prompt("Rename",k.name);if(v&&v.trim())act(sb.from("kids").update({name:v.trim()}).eq("id",k.id))};it.append(ed);S.append(it)});
+ const ki=el("input");ki.placeholder="Add person's name";const kd=el("select");[["child","Child"],["adult","Adult"]].forEach(([v,t])=>{const o=el("option",null,t);o.value=v;kd.append(o)});const kb=el("button","add","Add");
+ kb.onclick=()=>{const v=ki.value.trim();if(v)act(sb.from("kids").insert({name:v,kind:kd.value}))};
+ const kr=el("div","row");kr.append(ki,kd,kb);S.append(kr);
+ F.append(el("b",null,"Accounts"),el("div","sub","New people create an account, then you give them a role here."));
+ profs.forEach(p=>{
+  const self=p.id===me.id,box=el("div","item");box.style.display="block";
+  const ni=el("input");ni.value=p.name||"";ni.placeholder="Name";const r1=el("div","row");r1.append(ni);box.append(r1);
+  let rs,ks;
+  if(!self){const r2=el("div","row");rs=el("select");Object.keys(ROLES).forEach(k=>{const o=el("option",null,ROLES[k]);o.value=k;rs.append(o)});rs.value=p.role==="admin"?"parent":p.role;
+   ks=el("select");kids.forEach(k=>{const o=el("option",null,k.name);o.value=k.id;ks.append(o)});ks.value=p.kid_id||(kids[0]&&kids[0].id)||"";
+   const sh=()=>{ks.style.display=rs.value==="child"?"":"none"};sh();rs.onchange=sh;r2.append(rs,ks);box.append(r2)}
+  else box.append(el("div","sub","You (Admin)"));
+  const r3=el("div","row"),sv=el("button","add","Save");
+  sv.onclick=()=>act(sb.from("profiles").update(self?{name:ni.value.trim()||p.name}:{name:ni.value.trim()||p.name,role:rs.value,kid_id:rs.value==="child"?ks.value:null}).eq("id",p.id));
+  r3.append(sv);
+  if(!self){const rm=el("button","add","Remove");rm.style.cssText="background:var(--red);color:#fff";rm.onclick=()=>{if(confirm("Remove "+(p.name||"this user")+"? They will lose access."))act(sb.from("profiles").delete().eq("id",p.id))};r3.append(rm)}
+  box.append(r3);F.append(box)});
+}
+$("mb").onclick=()=>{$("side").classList.add("open");$("ov").classList.add("show")};
+$("ov").onclick=()=>{$("side").classList.remove("open");$("ov").classList.remove("show")};
 init();
 </script></body></html>
-
