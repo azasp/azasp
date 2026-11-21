@@ -58,7 +58,7 @@ const MK={class:["Classes",""],item:["Shopping items","Default price ₹"],reaso
 const ALLOW={admin:["over","money","stars","shop","classes","health","masters","people"],parent:["over","money","stars","shop","classes","health"],teacher:["classes","health"],child:["money","stars"],pending:[]};
 const $=id=>document.getElementById(id);
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
-let sb,me,prof,masters=[],kids=[],items=[],profs=[],tab="",kid=null,busy=false;
+let openM={},sb,me,prof,masters=[],kids=[],items=[],profs=[],tab="",kid=null,busy=false;
 const role=()=>prof?prof.role:"pending";
 const nm=id=>(profs.find(p=>p.id===id)||{}).name||"";
 const HT={temp:["🌡 Temperature","°F"],weight:["⚖ Weight","kg"],height:["📏 Height","cm"],med:["💊 Medicine",""],sym:["🤒 Symptom",""],doc:["🩺 Doctor visit",""],vac:["💉 Vaccine",""]};
@@ -216,21 +216,24 @@ function mkUser(F){
 function masterTab(S){
  S.append(el("div","sub","Set up lists once. They appear as dropdowns when adding entries."));
  Object.keys(MK).forEach(k=>{
-  const h=el("b",null,MK[k][0]);h.style.cssText="display:block;margin-top:14px";S.append(h);
+  const n0=masters.filter(m=>m.kind===k).length;
+  const h=el("button","x",(openM[k]?"▾ ":"▸ ")+MK[k][0]+(k==="rate"?"":" ("+n0+")"));h.style.cssText="display:block;width:100%;text-align:left;margin-top:10px;padding:10px;font-size:16px;font-weight:700;color:var(--tx);border:1px solid var(--bd);border-radius:8px;background:var(--bg)";
+  h.onclick=()=>{openM[k]=!openM[k];draw()};
+  S.append(h);const W=el("div");W.style.display=openM[k]?"block":"none";S.append(W);
   const ml=masters.filter(m=>m.kind===k);
-  if(k==="rate"){const cur=ml[0];S.append(el("div","sub",cur?"Current: ₹"+cur.value+" per star":"Not set yet"));const r=el("div","row"),v=el("input");v.type="number";v.step="any";v.inputMode="decimal";v.placeholder="₹ per star";
-   const b=el("button","add","Set");b.onclick=()=>{const val=parseFloat(v.value);if(!(val>0))return;act((async()=>{await sb.from("masters").delete().eq("kind","rate");return sb.from("masters").insert({kind:"rate",name:"₹ per star",value:val})})())};r.append(v,b);S.append(r);return}
-  if(!ml.length)S.append(el("div","sub","None yet."));
+  if(k==="rate"){const cur=ml[0];W.append(el("div","sub",cur?"Current: ₹"+cur.value+" per star":"Not set yet"));const r=el("div","row"),v=el("input");v.type="number";v.step="any";v.inputMode="decimal";v.placeholder="₹ per star";
+   const b=el("button","add","Set");b.onclick=()=>{const val=parseFloat(v.value);if(!(val>0))return;act((async()=>{await sb.from("masters").delete().eq("kind","rate");return sb.from("masters").insert({kind:"rate",name:"₹ per star",value:val})})())};r.append(v,b);W.append(r);return}
+  if(!ml.length)W.append(el("div","sub","None yet."));
   ml.forEach(m=>{const it=el("div","item"),l=el("div",null,m.name);if(m.value)l.append(el("span","sub","  "+(k==="item"?"₹":"")+m.value+(k==="reward"?" ⭐":"")));
    const x=el("button","x","✕");x.onclick=()=>{if(confirm("Remove this?"))act(sb.from("masters").delete().eq("id",m.id))};const ed=el("button","x","✎");
    ed.onclick=()=>{const nn=prompt("Name",m.name);if(nn===null)return;const upd={name:nn.trim()||m.name};
     if(k==="item"||k==="reason"||k==="reward"){const vv=prompt(MK[k][1]||"Value",m.value==null?"":m.value);if(vv===null)return;const num=parseFloat(vv);upd.value=isNaN(num)?null:num}
     act(sb.from("masters").update(upd).eq("id",m.id))};
-   it.append(l,ed,x);S.append(it)});
+   it.append(l,ed,x);W.append(it)});
   const r=el("div","row"),n=el("input"),v=el("input");n.placeholder="Add name";r.append(n);
   if(k==="item"||k==="reason"||k==="reward"){v.type="number";v.step="any";v.inputMode="decimal";v.placeholder=MK[k][1];r.append(v)}
   const b=el("button","add","Add");b.onclick=()=>{const nv=n.value.trim();if(!nv)return;const val=parseFloat(v.value);act(sb.from("masters").insert({kind:k,name:nv,value:isNaN(val)?null:val}))};
-  r.append(b);S.append(r)});
+  r.append(b);W.append(r)});
 }
 function people(S,F,L){
  S.append(el("b",null,"Family members"));
