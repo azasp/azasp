@@ -51,11 +51,11 @@ const TABS={over:{n:"📊 Overview"},
  shop:{n:"🛍 Shopping",num:"Price ₹",txt:"Item"},
  classes:{n:"📚 Classes",txt:"Class & activity / homework"},
  health:{n:"🌡 Health",num:"Temp °F",txt:"Symptoms / medicine / note"},
- masters:{n:"🗂 Masters"},people:{n:"👥 People"},profile:{n:"👤 Profile"}};
+ rewards:{n:"🎁 Rewards"},masters:{n:"🗂 Masters"},people:{n:"👥 People"},profile:{n:"👤 Profile"}};
 const ROLES={parent:"Parent",teacher:"Teacher / caregiver",child:"Member (own view)",pending:"No access"};
 const KMAP={money:"category",stars:"reason",shop:"item",classes:"class",health:"medicine"};
 const MK={class:["Classes",""],item:["Shopping items","Default price ₹"],reason:["Star reasons","Stars (use − to deduct)"],reward:["Star rewards (redeem)","Cost in stars"],rate:["Star → money rate",""],category:["Money categories",""],medicine:["Medicines",""]};
-const ALLOW={admin:["over","money","stars","shop","classes","health","masters","people","profile"],parent:["over","money","stars","shop","classes","health","profile"],teacher:["classes","health","profile"],child:["money","stars","profile"],pending:[]};
+const ALLOW={admin:["over","money","stars","rewards","shop","classes","health","masters","people","profile"],parent:["over","money","stars","rewards","shop","classes","health","profile"],teacher:["classes","health","profile"],child:["money","stars","rewards","profile"],pending:[]};
 const $=id=>document.getElementById(id);
 const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 let openM={},sb,me,prof,masters=[],kids=[],items=[],profs=[],tab="",kid=null,busy=false;
@@ -126,7 +126,7 @@ function draw(){
  al.forEach(k=>{const b=el("button",k===tab?"on":"",TABS[k].n);b.onclick=()=>{tab=k;sd.classList.remove("open");$("ov").classList.remove("show");draw()};sd.append(b)});
  if(r!=="child"&&kids.length>1&&tab!=="over"&&tab!=="people"&&tab!=="masters"&&tab!=="profile"){const s=el("select");kids.forEach(k=>{const o=el("option",null,kl(k));o.value=k.id;s.append(o)});s.value=kid;s.style.width="100%";s.onchange=()=>{kid=s.value;draw()};A.append(s)}
  const S=el("div","card"),F=el("div","card"),L=el("div","card");
- if(tab==="over")overview(S);else if(tab==="people")people(S,F,L);else if(tab==="masters")masterTab(S);else if(tab==="profile")profileTab(S);else entries(S,F,L,r);
+ if(tab==="over")overview(S);else if(tab==="people")people(S,F,L);else if(tab==="masters")masterTab(S);else if(tab==="profile")profileTab(S);else if(tab==="rewards")rewardsTab(S,F,L,r);else entries(S,F,L,r);
  [S,F,L].forEach(x=>{if(x.childNodes.length)A.append(x)});
 }
 let ovKid=null;
@@ -155,7 +155,7 @@ function entries(S,F,L,r){
  else if(tab==="shop")S.append(el("div","sub","Spent so far"),el("div","big","₹"+list.filter(i=>i.done).reduce((t,i)=>t+i.num,0).toFixed(2)));
  else if(tab==="health")healthSummary(S,list);
  else S.append(el("div","sub","Entries"),el("div","big",list.length));
- if(tab==="stars"&&(r==="admin"||r==="parent"))redeem(S,list.reduce((t,i)=>t+i.num*(i.sign==0?1:-1),0));
+ if(tab==="stars"&&ALLOW[r].includes("rewards")){const g=el("button","link","🎁 Redeem stars →");g.style.marginTop="10px";g.onclick=()=>{tab="rewards";draw()};S.append(g)}
  if(canAdd){
   let hs,r0;if(tab==="health"){hs=el("select");Object.keys(HT).forEach(k=>{const o=el("option",null,HT[k][0]);o.value=k;hs.append(o)});r0=el("div","row");r0.append(hs)}
   const txt=el("input");txt.placeholder=T.txt;const r1=el("div","row");r1.append(txt);
@@ -252,6 +252,30 @@ function profileTab(S){
  pr2.append(pi,pb);S.append(el("div","sub","Change password"),pr2);
  const so2=el("button","add","Sign out");so2.style.cssText="margin-top:14px;background:var(--bd);color:var(--tx)";so2.onclick=async()=>{prof=null;await sb.auth.signOut()};S.append(so2);
 }
+const pic=v=>{if(v&&/^https:\/\//i.test(v)){const i=document.createElement("img");i.src=v;i.alt="";i.loading="lazy";i.style.cssText="width:100%;height:90px;object-fit:cover;border-radius:8px";return i}const d=el("div",null,v||"🎁");d.style.cssText="font-size:48px;text-align:center;height:90px;line-height:90px";return d};
+function rewardsTab(S,F,L,r){
+ const rate=(masters.find(m=>m.kind==="rate")||{}).value,rw=masters.filter(m=>m.kind==="reward").sort((a,b)=>a.value-b.value);
+ const tot=items.filter(i=>i.cat==="stars"&&i.kid_id===kid).reduce((t,i)=>t+i.num*(i.sign==0?1:-1),0),canR=r==="admin"||r==="parent";
+ const big=el("div","big"+(tot<0?" neg":""),tot+" ⭐");
+ S.append(el("div","sub","Stars available"),big);
+ if(rate)S.append(el("div","sub","1 ⭐ = ₹"+rate));
+ if(!rw.length)L.append(el("div","sub","No rewards yet. The admin adds them in Masters → Star rewards."));
+ else{const g=el("div");g.style.cssText="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px";
+  rw.forEach(m=>{const c=el("div");c.style.cssText="border:1px solid var(--bd);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:6px";
+   const nm2=el("b",null,m.name),cost=el("div","sub",m.value+" ⭐"+(rate?" · ₹"+Math.round(m.value*rate*100)/100:""));
+   const need=m.value-tot;let btn;
+   if(canR&&need<=0){btn=el("button","add","Redeem");btn.onclick=()=>{if(confirm("Redeem "+m.name+" for "+m.value+" stars?"))act(sb.from("entries").insert({kid_id:kid,cat:"stars",sign:1,num:m.value,text:"Redeemed: "+m.name}))}}
+   else{btn=el("div","sub",need<=0?"Ready! Ask a parent":"Need "+need+" more ⭐");btn.style.textAlign="center"}
+   c.append(pic(m.image),nm2,cost,btn);g.append(c)});
+  L.append(g)}
+ if(canR){F.append(el("b",null,"Convert stars to money"));
+  const b=el("div","row"),n=el("input");n.type="number";n.min="1";n.step="1";n.inputMode="numeric";n.placeholder=rate?"Stars to convert (₹"+rate+" each)":"Set the rate in Masters first";
+  const cb=el("button","add","Convert to ₹");
+  cb.onclick=()=>{const v=parseFloat(n.value);if(!rate||!(v>0))return;if(v>tot){msg("Not enough stars ("+tot+" available).");return}
+   const money=Math.round(v*rate*100)/100;
+   if(confirm("Convert "+v+" stars to ₹"+money+"?"))act(sb.from("entries").insert([{kid_id:kid,cat:"stars",sign:1,num:v,text:"Converted to ₹"+money},{kid_id:kid,cat:"money",sign:0,num:money,text:"From "+v+" stars"}]))};
+  b.append(n,cb);F.append(b)}
+}
 function masterTab(S){
  S.append(el("div","sub","Set up lists once. They appear as dropdowns when adding entries."));
  Object.keys(MK).forEach(k=>{
@@ -263,16 +287,16 @@ function masterTab(S){
   if(k==="rate"){const cur=ml[0];W.append(el("div","sub",cur?"Current: ₹"+cur.value+" per star":"Not set yet"));const r=el("div","row"),v=el("input");v.type="number";v.step="any";v.inputMode="decimal";v.placeholder="₹ per star";
    const b=el("button","add","Set");b.onclick=()=>{const val=parseFloat(v.value);if(!(val>0))return;act((async()=>{await sb.from("masters").delete().eq("kind","rate");return sb.from("masters").insert({kind:"rate",name:"₹ per star",value:val})})())};r.append(v,b);W.append(r);return}
   if(!ml.length)W.append(el("div","sub","None yet."));
-  ml.forEach(m=>{const it=el("div","item"),l=el("div",null,m.name);if(m.value)l.append(el("span","sub","  "+(k==="item"?"₹":"")+m.value+(k==="reward"?" ⭐":"")));
+  ml.forEach(m=>{const it=el("div","item"),l=el("div",null,(k==="reward"&&m.image&&!/^https?:/i.test(m.image)?m.image+" ":"")+m.name);if(m.value)l.append(el("span","sub","  "+(k==="item"?"₹":"")+m.value+(k==="reward"?" ⭐":"")));
    const x=el("button","x","✕");x.onclick=()=>{if(confirm("Remove this?"))act(sb.from("masters").delete().eq("id",m.id))};const ed=el("button","x","✎");
    ed.onclick=()=>{const nn=prompt("Name",m.name);if(nn===null)return;const upd={name:nn.trim()||m.name};
-    if(k==="item"||k==="reason"||k==="reward"){const vv=prompt(MK[k][1]||"Value",m.value==null?"":m.value);if(vv===null)return;const num=parseFloat(vv);upd.value=isNaN(num)?null:num}
+    if(k==="item"||k==="reason"||k==="reward"){const vv=prompt(MK[k][1]||"Value",m.value==null?"":m.value);if(vv===null)return;const num=parseFloat(vv);upd.value=isNaN(num)?null:num;if(k==="reward"){const im=prompt("Picture: an emoji, or an image link starting with https:// (empty to clear)",m.image||"");if(im===null)return;upd.image=im.trim()||null}}
     act(sb.from("masters").update(upd).eq("id",m.id))};
    it.append(l,ed,x);W.append(it)});
-  const r=el("div","row"),n=el("input"),v=el("input");n.placeholder="Add name";r.append(n);
+  const r=el("div","row"),n=el("input"),v=el("input"),im=el("input");n.placeholder="Add name";im.placeholder="Emoji or https:// image link (optional)";r.append(n);
   if(k==="item"||k==="reason"||k==="reward"){v.type="number";v.step="any";v.inputMode="decimal";v.placeholder=MK[k][1];r.append(v)}
-  const b=el("button","add","Add");b.onclick=()=>{const nv=n.value.trim();if(!nv)return;const val=parseFloat(v.value);act(sb.from("masters").insert({kind:k,name:nv,value:isNaN(val)?null:val}))};
-  r.append(b);W.append(r)});
+  const b=el("button","add","Add");b.onclick=()=>{const nv=n.value.trim();if(!nv)return;const val=parseFloat(v.value);act(sb.from("masters").insert({kind:k,name:nv,value:isNaN(val)?null:val,image:(k==="reward"&&im.value.trim())||null}))};
+  r.append(b);if(k==="reward"){const r2=el("div","row");r2.append(im);W.append(r2)}W.append(r)});
 }
 function people(S,F,L){
  S.append(el("b",null,"Family members"));
