@@ -129,11 +129,26 @@ function draw(){
  if(tab==="over")overview(S);else if(tab==="people")people(S,F,L);else if(tab==="masters")masterTab(S);else if(tab==="profile")profileTab(S);else entries(S,F,L,r);
  [S,F,L].forEach(x=>{if(x.childNodes.length)A.append(x)});
 }
+let ovKid=null;
 function overview(S){
- kids.forEach(k=>{const t=stats(k.id),c=el("div","item"),l=el("div");
-  l.append(el("b",null,kl(k)),el("div","sub","Balance ₹"+t.bal.toFixed(2)+" · Stars "+t.st+" · Spent ₹"+t.spent.toFixed(2)+" · Temp "+(t.temp?t.temp+"°F":"—")));c.append(l);S.append(c)});
+ if(!kids.length){S.append(el("div","sub","No people yet."));return}
+ let def=null;try{def=localStorage.getItem("mt-default")}catch(e){}
+ const dId=(kids.find(k=>k.id===def)||kids[0]).id;
+ if(!kids.find(k=>k.id===ovKid))ovKid=dId;
+ const k=kids.find(x=>x.id===ovKid),t=stats(k.id);
+ const chips=el("div");chips.style.cssText="display:flex;gap:6px;flex-wrap:wrap";
+ kids.forEach(x=>{const b=el("button","add",(x.id===dId?"★ ":"")+kl(x));if(x.id!==ovKid)b.style.cssText="background:var(--bd);color:var(--tx)";b.onclick=()=>{ovKid=x.id;draw()};chips.append(b)});
+ S.append(chips);
+ const g=el("div");g.style.cssText="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px";
+ [["Money","₹"+t.bal.toFixed(2),false],["Stars",String(t.st),t.st<0],["Shopping spent","₹"+t.spent.toFixed(2),false],["Last temperature",t.temp?t.temp+"°F":"—",t.temp>=100.4]].forEach(([a,b,bad])=>{
+  const c=el("div");c.style.cssText="border:1px solid var(--bd);border-radius:10px;padding:10px";
+  const v=el("div",bad?"neg":null,b);v.style.cssText="font-size:22px;font-weight:700";c.append(el("div","sub",a),v);g.append(c)});
+ S.append(g);
+ if(k.id!==dId){const d=el("button","link","Make "+k.name+" the default");d.style.marginTop="10px";d.onclick=()=>{try{localStorage.setItem("mt-default",k.id)}catch(e){}draw()};S.append(d)}
+ const rec=items.filter(i=>i.kid_id===k.id).slice(0,3);
+ if(rec.length){const h=el("div","sub","Latest");h.style.marginTop="14px";S.append(h);
+  rec.forEach(i=>{const d=el("div",null,(TABS[i.cat]?TABS[i.cat].n.split(" ")[0]:"")+" "+(i.text||TABS[i.cat].n.split(" ").slice(1).join(" "))+" · "+(i.date||""));d.style.cssText="padding:6px 0;font-size:15px";S.append(d)})}
 }
-async function act(p){busy=true;msg("Saving…");const{error}=await p;busy=false;if(error)msg(error.message);else{msg("");await load()}draw()}
 function entries(S,F,L,r){
  const T=TABS[tab],list=items.filter(i=>i.cat===tab&&i.kid_id===kid),canAdd=["admin","parent","teacher"].includes(r);
  if(T.sign){const tot=list.reduce((t,i)=>t+i.num*(i.sign==0?1:-1),0);S.append(el("div","sub",tab==="money"?"Balance":"Total stars"),el("div","big"+(tot<0?" neg":""),(tab==="money"?"₹":"")+tot.toFixed(tab==="money"?2:0)))}
