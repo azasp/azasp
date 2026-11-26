@@ -8,13 +8,14 @@ the function sends that existing account a sign-in OTP instead and leaves
 auth_user_id unlinked until acceptance. An invited member is not active and must
 not be granted family-data access.
 
-When the invitee follows the Auth invitation or existing-user sign-in email,
-authenticates, and the app starts, the app calls the same function with action
-accept. The function compares the authenticated account's email with the stored
-invitation email, then links the account and activates the membership. It updates
-each invitation conditionally so a concurrent acceptance cannot link it to a
-different user. The service-role key is used only inside the Edge Function and
-must never be exposed to the browser.
+Each email redirect carries the opaque family_members invitation row ID in the
+family_invitation query parameter. When the invitee follows that specific email,
+authenticates, and the app starts, the app passes that ID to the function with
+action accept. The function loads only that row, compares the authenticated
+account's email with the stored invitation email, and conditionally links and
+activates only that membership. Other pending invitations for the same email,
+including invitations from other families, remain pending. The service-role key
+is used only inside the Edge Function and must never be exposed to the browser.
 
 Accepted non-owner members see a read-only Family & devices view containing only
 their own registered devices and accounts assigned to their family_members row.
@@ -34,6 +35,8 @@ discovery starts from the member's own active family_members row.
    acceptance, and rejection of an email-mismatch attempt.
 5. Test concurrent duplicate invites for one family/email; only one pending membership
    should be created. Also test that a different family can invite the same email.
+6. Invite the same email to two different families, accept one email link, and verify
+   only that invitation becomes active while the other remains invited.
 
 For existing Auth users, the function sends a sign-in OTP email and leaves the
 membership unlinked until the account authenticates. A unique partial database
