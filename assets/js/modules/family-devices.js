@@ -26,7 +26,7 @@ async function familyDevicesTab(S,F,L){
  S.append(el("div","sub",family.name+" · owner workspace"));
  S.append(el("b",null,"Members"));
  const mn=el("input");mn.placeholder="Add member (e.g. Zeba)";const mb=el("button","add","Add member");row(S,mn,mb);
- mb.onclick=async()=>{if(!mn.value.trim())return;mb.disabled=true;const z=await sb.from("family_members").insert({family_id:family.id,display_name:mn.value.trim(),role:"member",status:"active"});if(z.error){mb.disabled=false;return msg(z.error.message)}draw()};
+ mb.onclick=async()=>{if(!mn.value.trim())return;mb.disabled=true;const z=await sb.from("family_members").insert({family_id:family.id,display_name:mn.value.trim(),role:"member",status:"invited"});if(z.error){mb.disabled=false;return msg(z.error.message)}msg("Member record created as invited. They cannot access family data until an authenticated account is linked and the invitation is accepted.");draw()};
  members.forEach(m=>S.append(el("div","item",m.display_name+" · "+m.role+" · "+m.status)));
  S.append(el("b",null,"Device registration · new devices require approval"));
  const dn=el("input");dn.placeholder="Friendly device name (Vikas Personal)";
