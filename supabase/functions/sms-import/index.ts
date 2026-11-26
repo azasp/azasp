@@ -100,7 +100,7 @@ Deno.serve(async (req: Request) => {
   const accountsResult = await db.from("financial_accounts").select("id,account_type,account_last4").eq("family_id", family.id).eq("is_active", true);
   const accounts = accountsResult.data || [];
   const expenseRows = transactions.map(x => {
-    const account = x.account_last4 ? accounts.find(a => a.account_last4 === x.account_last4) : null;
+    const accountMatches = x.account_last4 ? accounts.filter(a => a.account_last4 === x.account_last4) : [];\n    const account = accountMatches.length === 1 ? accountMatches[0] : null;
     return {
       user_id: family.owner_user_id, family_id: family.id, source_family_device_id: device.id,
       transaction_date: x.received_at.slice(0, 10), transaction_type: x.event_kind === "income_credit" ? "income" : "expense",
