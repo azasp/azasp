@@ -25,8 +25,20 @@ async function familyDevicesTab(S,F,L){
  if(!members.some(x=>x.auth_user_id===me.id)){const z=await sb.from("family_members").insert({family_id:family.id,auth_user_id:me.id,display_name:prof?.name||me.email||"Owner",role:"admin",status:"active"});if(z.error){note(S,z.error.message);return}draw();return}
  S.append(el("div","sub",family.name+" · owner workspace"));
  S.append(el("b",null,"Members"));
- const mn=el("input");mn.placeholder="Add member (e.g. Zeba)";const mb=el("button","add","Add member");row(S,mn,mb);
- mb.onclick=async()=>{if(!mn.value.trim())return;mb.disabled=true;const z=await sb.from("family_members").insert({family_id:family.id,display_name:mn.value.trim(),role:"member",status:"invited"});if(z.error){mb.disabled=false;return msg(z.error.message)}msg("Member record created as invited. They cannot access family data until an authenticated account is linked and the invitation is accepted.");draw()};
+ const mn=el("input");mn.placeholder="Member name";mn.autocomplete="name";
+ const mi=el("input");mi.type="email";mi.placeholder="Member email address";mi.autocomplete="email";mi.setAttribute("autocapitalize","none");
+ const mb=el("button","add","Send invitation");row(S,mn,mi,mb);
+ mb.onclick=async()=>{
+  const displayName=mn.value.trim(),email=mi.value.trim().toLowerCase();
+  if(!displayName||!/^\\S+@\\S+\\.\\S+$/.test(email))return msg("Enter the member's name and a valid email address.");
+  mb.disabled=true;
+  const result=await sb.functions.invoke("family-invitations",{body:{action:"invite",family_id:family.id,display_name:displayName,email}});
+  mb.disabled=false;
+  if(result.error)return msg("Invitation failed: "+result.error.message);
+  mn.value="";mi.value="";
+  msg("Invitation email sent. The member must open it, sign in, and accept before family access is enabled.");
+  draw();
+ };
  members.forEach(m=>S.append(el("div","item",m.display_name+" · "+m.role+" · "+m.status)));
  S.append(el("b",null,"Device registration · new devices require approval"));
  const dn=el("input");dn.placeholder="Friendly device name (Vikas Personal)";
