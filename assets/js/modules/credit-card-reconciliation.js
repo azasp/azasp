@@ -22,7 +22,7 @@ function renderCreditCardReconciliation(host, canEdit) {
             saveAccount.disabled=false;
             if(error){msg("Could not add account: "+error.message);return}
             institution.value=nickname.value=accountLast4.value="";
-            await drawFinancialAccounts(accountsList);
+            host.replaceChildren(); renderCreditCardReconciliation(host,canEdit);
         };
     }
     box.append(accountsBox);
@@ -100,10 +100,11 @@ async function drawCreditCardBills(list, canEdit) {
                 await drawCreditCardBills(list, canEdit);
             };
             const controls = el("div", "row"); controls.append(select, link); row.append(controls);
-            if (bill.payment_expense_id && within) {
+            if (bill.payment_expense_id) {
                 const confirm = el("button", "add", "Confirm card issuer received payment");
                 confirm.onclick = async () => {
-                    if (!window.confirm("Confirm that the card issuer has credited this payment?")) return;
+                    const warning = within ? "" : " The amount differs from the statement by more than ₹1; confirm only after checking the discrepancy.";
+                    if (!window.confirm("Confirm that the card issuer has credited this payment?" + warning)) return;
                     const { error: confirmError } = await sb.from("credit_card_bills").update({ settlement_confirmed: true, settlement_confirmed_at: new Date().toISOString() }).eq("id", bill.id);
                     if (confirmError) { msg("Could not confirm settlement: " + confirmError.message); return }
                     await drawCreditCardBills(list, canEdit);
