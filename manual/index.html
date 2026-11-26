@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#e8a200">
+<title>MyTracker — User & Admin Manual</title>
+<style>
+:root{color-scheme:light;--bg:#f7f7f5;--paper:#fff;--ink:#202124;--muted:#687078;--line:#e4e5e7;--accent:#e8a200;--soft:#fff6dc;--link:#805900}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{background:#202124;color:#fff;padding:26px max(22px,calc((100% - 1180px)/2));display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+header a{color:#ffe08a;text-decoration:none}header h1{margin:0;font-size:clamp(1.5rem,4vw,2.2rem)}header p{margin:4px 0 0;color:#d2d5d8}
+.layout{max-width:1180px;margin:24px auto;padding:0 18px;display:grid;grid-template-columns:255px minmax(0,1fr);gap:24px}
+nav{position:sticky;top:16px;align-self:start;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px;max-height:calc(100vh - 32px);overflow:auto}
+nav strong{display:block;margin:4px 0 10px}nav a{display:block;color:var(--link);text-decoration:none;padding:5px 7px;border-radius:7px;font-size:.94rem}nav a:hover{background:var(--soft)}
+main{min-width:0}.panel{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:clamp(18px,3vw,28px);margin-bottom:18px;scroll-margin-top:18px}
+h2{font-size:1.45rem;margin:0 0 12px}h3{font-size:1.08rem;margin:22px 0 6px}p{margin:8px 0}li{margin:5px 0}.muted,.note{color:var(--muted)}.callout{background:var(--soft);border-left:4px solid var(--accent);padding:12px 15px;border-radius:8px;margin:14px 0}
+.pill{display:inline-block;background:#f0f1f2;border-radius:999px;padding:2px 9px;font-size:.78rem;margin:2px 4px 2px 0}.admin{border-left:4px solid #9a6bdb}.user{border-left:4px solid #26966f}
+.diagram{overflow:auto;border:1px solid var(--line);border-radius:10px;padding:12px;margin:12px 0;background:#fff}.mermaid{min-width:600px;text-align:center}
+input[type=search]{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:9px;font:inherit;margin:0 0 16px}
+table{border-collapse:collapse;width:100%;display:block;overflow:auto}th,td{text-align:left;border-bottom:1px solid var(--line);padding:9px;vertical-align:top;min-width:125px}th{background:#fafafa}
+footer{text-align:center;color:var(--muted);padding:20px}
+@media(max-width:800px){.layout{grid-template-columns:1fr}nav{position:static;max-height:none}nav .navgrid{columns:2}.diagram .mermaid{min-width:540px}}
+@media print{body{background:#fff}header{background:#fff;color:#000;padding:10px 0}header p{color:#333}.layout{display:block;max-width:none;margin:0;padding:0}nav{display:none}.panel{break-inside:avoid;border:0;padding:12px 0}.diagram{break-inside:avoid}a{color:#000}}
+</style>
+</head>
+<body>
+<header>
+ <div><h1>⭐ MyTracker Manual</h1><p>A practical guide for family members, parents, teachers and administrators</p></div>
+ <div><a href="../">← Back to MyTracker</a></div>
+</header>
+<div class="layout">
+<nav aria-label="Manual contents">
+ <strong>Contents</strong>
+ <input id="manualSearch" type="search" placeholder="Search this manual…" aria-label="Search manual">
+ <div class="navgrid">
+ <a href="#start">Getting started</a><a href="#roles">Roles & access</a><a href="#overview">Overview</a>
+ <a href="#money-stars">Money & stars</a><a href="#shopping">Shopping & rewards</a><a href="#classes-health">Classes & health</a>
+ <a href="#expenses">Expenses</a><a href="#cards">Credit cards</a><a href="#family">Family invitations</a>
+ <a href="#devices">Devices</a><a href="#sms">SMS imports</a><a href="#admin">Admin guide</a>
+ <a href="#security">Privacy & security</a><a href="#faq">Troubleshooting</a><a href="#flows">All workflows</a>
+ </div>
+</nav>
+<main id="manualContent">
+<section class="panel" id="start" data-search="getting started login sign in profile">
+<h2>1. Getting started</h2>
+<p>Open MyTracker and sign in with the account invited or created for you. Your available navigation is based on the role assigned to your account.</p>
+<ol><li>Sign in using the configured authentication method.</li><li>Open <b>Profile</b> to review the account details shown to you.</li><li>Choose the relevant family member where the screen provides a member selector.</li><li>Use the navigation menu to open the features available to your role.</li></ol>
+<div class="callout">If the app says your account is waiting for approval, ask the family administrator to review your membership and assign the appropriate role. Do not create another account to bypass approval.</div>
+</section>
+<section class="panel" id="roles" data-search="roles permissions admin parent teacher caregiver child member">
+<h2>2. Roles and access</h2>
+<p>MyTracker uses role-based navigation. The table describes the current application menu permissions; database policies remain the authority for data access.</p>
+<table><thead><tr><th>Role</th><th>Available areas</th><th>Typical use</th></tr></thead><tbody>
+<tr><td>Admin</td><td>Overview, Money, Stars, Rewards, Shopping, Classes, Health, Masters, People, Expenses, Family & devices, Profile</td><td>Family administration and configuration</td></tr>
+<tr><td>Parent</td><td>Overview, Money, Stars, Rewards, Shopping, Classes, Health, Expenses, Profile</td><td>Day-to-day family tracking</td></tr>
+<tr><td>Teacher / caregiver</td><td>Classes, Health, Profile</td><td>Learning and care records</td></tr>
+<tr><td>Member (own view)</td><td>Money, Stars, Rewards, Profile</td><td>View own permitted information</td></tr>
+<tr><td>Pending</td><td>No application areas</td><td>Waiting for access approval</td></tr>
+</tbody></table>
+<p class="note">A hidden menu item is not a substitute for server-side authorization. If access appears incorrect, contact the administrator.</p>
+</section>
+<section class="panel" id="overview" data-search="overview dashboard balance stars latest">
+<h2>3. Overview</h2><p>The Overview shows a quick summary for the selected family member, including money balance, stars, shopping spend and the latest recorded temperature when available. The member selector lets permitted roles switch between family members. The default member choice is stored in that browser.</p>
+</section>
+<section class="panel" id="money-stars" data-search="money balance allowance spend stars earn lose">
+<h2>4. Money and stars</h2>
+<h3>Money</h3><ol><li>Open <b>Money</b> and select the relevant member.</li><li>Enter a note, amount and date.</li><li>Choose Add for money received or Spend for money used.</li><li>Review the updated balance and entry history.</li></ol>
+<h3>Stars</h3><p>Use <b>Stars</b> to record earned or deducted stars with a reason. The available total is shown on the screen. Eligible roles can use Rewards to redeem a configured reward when enough stars are available.</p>
+</section>
+<section class="panel" id="shopping" data-search="shopping items price spent done checkbox rewards">
+<h2>5. Shopping and rewards</h2><p>Shopping entries record an item and price. Parent and Admin roles can mark an item as completed using its checkbox. Admin can remove an entry. Rewards are configured in Masters and redeemed from the Rewards area when the member has enough stars.</p>
+</section>
+<section class="panel" id="classes-health" data-search="classes homework health temperature medicine doctor vaccine">
+<h2>6. Classes and health</h2>
+<p><b>Classes</b> records class, activity or homework notes. <b>Health</b> records health notes and supported measurements such as temperature, weight and height, along with doctor visits and vaccinations. Use clear dates and descriptions. MyTracker is a record-keeping tool, not a medical diagnosis service.</p>
+</section>
+<section class="panel" id="expenses" data-search="expenses income csv import transaction categories filters">
+<h2>7. Expenses and transactions</h2>
+<p>The Expenses area summarises income and expenses, displays transactions and import history, and provides CSV import for supported exported data. Parent and Admin roles can use editing/import controls.</p>
+<ol><li>Choose the CSV file exported from the supported expense tracker.</li><li>Review the detected row count and mapping assumptions.</li><li>Import the file and inspect the resulting transactions.</li><li>Review categories, dates, amounts and accounts; correct any incorrect classification.</li></ol>
+<div class="callout">Always review imported data. Do not assume a CSV has been fully reconciled just because the import completed.</div>
+</section>
+<section class="panel" id="cards" data-search="credit card bills bank debit repayment allocation processor issuer credit reconciliation">
+<h2>8. Credit-card bills and reconciliation</h2>
+<p>MyTracker separates a bank debit, payment-processor processing and issuer credit. These are distinct events. A payment match within ₹1 tolerance is a candidate match only; it does not itself confirm settlement.</p>
+<ol><li>Register the bank account and credit-card account with institution, nickname and last four digits.</li><li>Add the card bill with statement amount and due date.</li><li>Link the relevant bank debit to the repayment as appropriate.</li><li>Record processor acceptance when there is evidence of processing.</li><li>Record issuer credit only when the card issuer confirms receipt.</li><li>Allocate the repayment to the bill and verify the outstanding amount.</li></ol>
+<div class="callout">Never mark a bill settled solely because the bank account was debited or a processor says the payment was processed. Settlement depends on issuer credit and the required allocation.</div>
+</section>
+<section class="panel admin" id="family" data-search="admin family invite invitation accept email pending active">
+<h2>9. Admin: family invitations</h2>
+<p>Family invitations are managed from <b>Family & devices</b>. The family owner/admin enters the invitee's name and email. The invitation remains pending until the intended invitee authenticates and accepts that specific invitation.</p>
+<ul><li>Invite the correct email address.</li><li>The invitee follows the invitation email and signs in with the matching email account.</li><li>The app accepts the specific invitation identified by its invitation ID.</li><li>Only that invitation becomes active; another pending invitation for the same email in another family remains pending.</li></ul>
+<p class="note">Do not forward invitation links. If the wrong email was invited, resolve the invitation with the administrator rather than attempting to change account identity.</p>
+</section>
+<section class="panel admin" id="devices" data-search="admin devices pairing code pending approval approved rejected revoke">
+<h2>10. Admin: device registration and approval</h2>
+<ol><li>Open <b>Family & devices</b> and generate a one-time pairing code.</li><li>Use the code in the MyTracker iPhone Shortcut to register the device.</li><li>The new device appears as pending approval.</li><li>Review the device and approve it only if it belongs to the intended family member.</li><li>Reject or revoke devices that should not submit imports.</li></ol>
+<p>The pairing code expires after 15 minutes and is single-use. Device credentials are private bearer secrets: do not share or paste them into messages or support requests.</p>
+</section>
+<section class="panel" id="sms" data-search="sms import iphone shortcut device credential duplicate message batch">
+<h2>11. iPhone SMS imports</h2>
+<p>The iPhone Shortcut sends messages exposed by the iOS Message automation to MyTracker. The device checks its approval status before import. MyTracker stores parsed event metadata and a message hash for deduplication; the original SMS body is not stored by the import function.</p>
+<ol><li>Pair the iPhone using the one-time code.</li><li>Wait for an administrator to approve the device.</li><li>Run the Shortcut and verify that the device status is approved.</li><li>Review import batch status and resulting transactions in Expenses.</li><li>Investigate skipped, failed, ambiguous or unlinked events.</li></ol>
+<div class="callout">iOS does not give this Shortcut unrestricted access to the entire Messages history. Only messages exposed by the configured automation can be sent. Test on the actual iPhone and iOS version.</div>
+</section>
+<section class="panel admin" id="admin" data-search="admin guide people masters categories medicines rewards rates roles">
+<h2>12. Admin guide</h2>
+<h3>People and roles</h3><p>Use People to manage the family people shown in the application. Assign only the role required for the person's responsibilities. Pending accounts should not be treated as active family members.</p>
+<h3>Masters</h3><p>Masters supplies reusable values such as classes, shopping items, star reasons, rewards, conversion rate, money categories and medicines. Keep names clear and avoid creating duplicate options.</p>
+<h3>Family and devices</h3><p>Use this area for invitations, device pairing and approval, and the family/device controls exposed to administrators. Review device ownership before approval and revoke credentials when a device is lost or no longer trusted.</p>
+<h3>Financial accounts</h3><p>Register bank and credit-card accounts using a nickname and last four digits. Do not enter full card numbers, PINs, CVVs, internet-banking passwords or OTPs.</p>
+</section>
+<section class="panel" id="security" data-search="privacy security access password otp secrets service role">
+<h2>13. Privacy and security</h2>
+<ul><li>Use your own account and do not share sign-in links or device credentials.</li><li>Never enter a full card number, CVV, PIN, bank password or OTP into MyTracker notes.</li><li>Approve only devices you recognise and revoke lost devices promptly.</li><li>Share only the family information needed by each role.</li><li>Use dummy or anonymised information when reporting a problem.</li><li>Contact the administrator if you see information belonging to another family or person.</li></ul>
+</section>
+<section class="panel" id="faq" data-search="faq troubleshooting pending approval import not showing card payment mismatch">
+<h2>14. Troubleshooting</h2>
+<h3>My account is waiting for approval</h3><p>Ask the family administrator to check the invitation and membership status. Ensure you signed in with the email address that received the invitation.</p>
+<h3>My device is pending</h3><p>An administrator must approve it. The Shortcut must stop importing until its status is approved.</p>
+<h3>SMS import is not showing a transaction</h3><p>Check the import batch status, device approval, duplicate-message behaviour and event classification. Some card-payment events are stored as repayment events rather than ordinary expenses.</p>
+<h3>Card bill still shows outstanding</h3><p>Check whether the bank debit, processor stage, issuer-credit confirmation and repayment allocation have all been recorded. A bank debit alone is not settlement.</p>
+<h3>Something looks wrong</h3><p>Record the screen, approximate time and steps that led to the issue. Remove personal data, account identifiers and SMS contents before sharing a screenshot with support.</p>
+</section>
+<section class="panel" id="flows" data-search="mermaid flowchart diagrams sign in invite device sms credit card admin">
+<h2>15. Visual workflows (Mermaid)</h2>
+<p>These diagrams show the main user and administrator journeys.</p>
+<h3>Sign-in and role-based access</h3>
+<div class="diagram"><pre class="mermaid">flowchart TD
+ A[Open MyTracker] --> B[Sign in]
+ B --> C{Account has active membership?}
+ C -- No --> D[Show waiting for approval]
+ D --> E[Contact family admin]
+ C -- Yes --> F[Load profile and role]
+ F --> G{Role}
+ G -- Admin --> H[Admin navigation]
+ G -- Parent --> I[Parent navigation]
+ G -- Teacher --> J[Classes, Health, Profile]
+ G -- Member --> K[Own Money, Stars, Rewards, Profile]</pre></div>
+<h3>Family invitation acceptance</h3>
+<div class="diagram"><pre class="mermaid">sequenceDiagram
+ participant A as Family Admin
+ participant S as MyTracker / Supabase
+ participant U as Invitee
+ A->>S: Invite name and email
+ S-->>U: Invitation email with invitation ID
+ U->>S: Sign in / authenticate
+ U->>S: Accept this invitation ID
+ S->>S: Check invitation status and email match
+ alt Valid intended invitation
+  S->>S: Activate only this membership
+  S-->>U: Family access enabled
+ else Invalid, expired or mismatched
+  S-->>U: Reject acceptance
+ end</pre></div>
+<h3>Device registration and approval</h3>
+<div class="diagram"><pre class="mermaid">flowchart TD
+ A[Admin creates one-time pairing code] --> B[User enters code in iPhone Shortcut]
+ B --> C[Device enrollment]
+ C --> D[Device created as pending]
+ D --> E{Admin review}
+ E -- Reject --> F[Device cannot import]
+ E -- Approve --> G[Device status approved]
+ G --> H[Shortcut checks status]
+ H --> I{Still approved?}
+ I -- No --> J[Stop]
+ I -- Yes --> K[Send eligible messages]</pre></div>
+<h3>SMS import pipeline</h3>
+<div class="diagram"><pre class="mermaid">flowchart TD
+ A[iOS Message automation provides message] --> B[Shortcut checks device status]
+ B --> C{Approved?}
+ C -- No --> D[Stop; do not send]
+ C -- Yes --> E[Send message batch]
+ E --> F[Validate device and family membership]
+ F --> G[Hash and classify messages]
+ G --> H[Deduplicate import events]
+ H --> I{Event type}
+ I -- Expense / income --> J[Materialize transaction when account match is unambiguous]
+ I -- Card payment --> K[Store repayment event for review]
+ I -- Unclassified --> L[Keep event for review]
+ J --> M[Review import batch]
+ K --> M
+ L --> M</pre></div>
+<h3>Credit-card repayment lifecycle</h3>
+<div class="diagram"><pre class="mermaid">flowchart TD
+ A[Bank debit observed] --> B[Create or link repayment]
+ B --> C[Processor accepts payment]
+ C --> D[Record processing evidence]
+ D --> E[Issuer confirms card credit]
+ E --> F[Record issuer-credit evidence]
+ F --> G[Allocate repayment to bill]
+ G --> H{Bill fully allocated and issuer credited?}
+ H -- No --> I[Bill remains outstanding]
+ H -- Yes --> J[Settlement confirmed]</pre></div>
+<h3>Admin device and membership management</h3>
+<div class="diagram"><pre class="mermaid">flowchart TD
+ A[Admin opens Family & devices] --> B{Task}
+ B --> C[Invite family member]
+ B --> D[Review pending device]
+ C --> E[Invitee accepts exact invitation]
+ E --> F[Membership active]
+ D --> G{Trusted device?}
+ G -- Yes --> H[Approve device]
+ G -- No --> I[Reject device]
+ H --> J[Device can request imports]
+ I --> K[Imports blocked]</pre></div>
+</section>
+<section class="panel" data-search="manual scope version feature availability">
+<h2>About this manual</h2>
+<p>This manual describes the current application navigation and the documented invitation, device and SMS workflows. Screens and permissions can change as MyTracker evolves. If a feature is not visible to your role, ask an administrator rather than assuming it is enabled.</p>
+<p class="muted">Last reviewed: 26 November 2026 · MyTracker User & Admin Manual</p>
+</section>
+</main>
+</div>
+<footer>MyTracker · User & Admin Manual</footer>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+if (window.mermaid) mermaid.initialize({startOnLoad:true,securityLevel:"strict",theme:"neutral",flowchart:{htmlLabels:false,curve:"basis"}});
+const search=document.getElementById("manualSearch"), sections=[...document.querySelectorAll("#manualContent .panel")];
+search.addEventListener("input",()=>{const q=search.value.trim().toLowerCase();sections.forEach(s=>{s.hidden=!!q&&!((s.innerText+" "+(s.dataset.search||"")).toLowerCase().includes(q))})});
+</script>
+</body></html>
