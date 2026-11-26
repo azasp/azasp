@@ -46,29 +46,50 @@ Deno.serve(async (req) => {
     const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
       data: { family_invitation: true, family_id: familyId, display_name: displayName },
     });
-    if (inviteError || !inviteData.user) return json({ error: inviteError?.message || "Could not send invitation" }, 400);
+
+    let invitedUserId: string | null = inviteData.user?.id || null;
+    let createdAuthUser = Boolean(inviteData.user?.id);
+    if (inviteError) {
+      // Existing Auth users cannot receive inviteUserByEmail. Send a sign-in OTP instead;
+      // keep the membership unlinked until that user authenticates with this exact email.
+      if (!/already (registered|exists)|user.*already|email.*exists/i.test(inviteError.message)) {
+        return json({ error: inviteError.message || "Could not send invitation" }, 400);
+      }
+      const { error: otpError } = await admin.auth.signInWithOtp({
+        email,
+        options: { shouldCreateUser: false },
+      });
+      if (otpError) return json({ error: "Could not send sign-in email to the existing account: " + otpError.message }, 400);
+    } else if (!invitedUserId) {
+      return json({ error: "Auth did not return an invited user" }, 400);
+    }
 
     const { data: member, error: insertError } = await admin.from("family_members").insert({
-      family_id: familyId, auth_user_id: inviteData.user.id, invited_email: email,
+      family_id: familyId, auth_user_id: invitedUserId, invited_email: email,
       display_name: displayName, role: "member", status: "invited",
     }).select("id").single();
     if (insertError) {
-      await admin.auth.admin.deleteUser(inviteData.user.id);
+      // Never delete an existing Auth account. Only roll back the user created by this request.
+      if (createdAuthUser && invitedUserId) await admin.auth.admin.deleteUser(invitedUserId);
       return json({ error: "Invitation could not be recorded: " + insertError.message }, 500);
     }
-    return json({ success: true, member_id: member.id });
+    return json({
+      success: true, member_id: member.id,
+      delivery: createdAuthUser ? "auth_invitation" : "sign_in_link",
+    });
   }
 
   if (body.action === "accept") {
     const email = userData.user.email.toLowerCase();
     const { data: pending, error: pendingError } = await admin.from("family_members")
-      .select("id,invited_email").eq("auth_user_id", userData.user.id).eq("status", "invited");
+      .select("id,auth_user_id,invited_email").eq("status", "invited").ilike("invited_email", email);
     if (pendingError) return json({ error: pendingError.message }, 500);
-    const matches = (pending || []).filter((m) => (m.invited_email || "").toLowerCase() === email);
+    const matches = (pending || []).filter((m) => !m.auth_user_id || m.auth_user_id === userData.user.id);
     if (!matches.length) return json({ success: true, accepted: 0 });
     const { error: updateError } = await admin.from("family_members")
-      .update({ status: "active", updated_at: new Date().toISOString() })
-      .in("id", matches.map((m) => m.id)).eq("auth_user_id", userData.user.id).eq("status", "invited");
+      .update({ auth_user_id: userData.user.id, status: "active", updated_at: new Date().toISOString() })
+      .in("id", matches.map((m) => m.id))
+      .in("auth_user_id", [userData.user.id, null]).eq("status", "invited");
     if (updateError) return json({ error: updateError.message }, 500);
     return json({ success: true, accepted: matches.length });
   }
