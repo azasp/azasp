@@ -33,6 +33,20 @@ async function familyDevicesTab(S,F,L){
  const owner=el("select");members.forEach(m=>{const o=el("option",null,m.display_name);o.value=m.id;owner.append(o)});
  const typ=el("select");[["iphone","iPhone"],["android","Android"],["ipad","iPad"],["tablet","Tablet"],["other","Other"]].forEach(([v,t])=>{const o=el("option",null,t);o.value=v;typ.append(o)});
  const add=el("button","add","Register pending");row(S,dn,owner,typ,add);
+ const pair=el("button","add","Create iPhone pairing code");pair.style.marginTop="8px";S.append(pair);
+ pair.onclick=async()=>{
+  if(!owner.value)return msg("Select a family member first.");
+  pair.disabled=true;
+  const alphabet="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";const bytes=crypto.getRandomValues(new Uint8Array(18));
+  const pairingCode=Array.from(bytes,b=>alphabet[b%alphabet.length]).join("");
+  const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(pairingCode));
+  const codeHash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
+  const expiresAt=new Date(Date.now()+15*60*1000).toISOString();
+  const saved=await sb.from("device_pairing_codes").insert({family_id:family.id,family_member_id:owner.value,code_hash:codeHash,created_by:me.id,expires_at:expiresAt});
+  pair.disabled=false;
+  if(saved.error)return msg("Could not create pairing code: "+saved.error.message);
+  prompt("Enter this one-time code in the MyTracker iPhone Shortcut. It expires in 15 minutes.",pairingCode);
+ };
  add.onclick=async()=>{if(!dn.value.trim())return msg("Enter a device name.");add.disabled=true;
   const z=await sb.from("family_devices").insert({family_id:family.id,family_member_id:owner.value,device_identifier:dn.value.trim(),device_type:typ.value,status:"pending_approval",registered_by:me.id}).select("id").single();
   if(z.error){add.disabled=false;return msg(z.error.message)}
