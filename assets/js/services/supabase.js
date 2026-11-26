@@ -1,13 +1,29 @@
 // Supabase initialization, authentication, data loading and writes.
 async function init() {
     if (typeof SUPABASE_URL === "undefined" || SUPABASE_URL.startsWith("PASTE")) { $("app").append(el("div", "card", "Add your Supabase URL and key in config.js.")); return }
-    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // Keep the Supabase session in browser storage across reloads and app visits.
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+            storage: window.localStorage
+        }
+    });
     configureActions({ load, draw, msg, isBusy: () => busy, setBusy: value => { busy = value; } });
-    sb.auth.onAuthStateChange((ev, s) => { if (ev === "SIGNED_IN" || ev === "SIGNED_OUT") start() });
+    // Defer work until the auth callback releases its internal lock. Calling
+    // getSession()/database methods directly inside this callback can race sign-in.
+    sb.auth.onAuthStateChange((ev, session) => {
+        if (ev === "SIGNED_IN") window.setTimeout(() => start(session), 0);
+        if (ev === "SIGNED_OUT") window.setTimeout(() => {
+            me = null; prof = null; kids = []; items = []; profs = []; masters = [];
+            login();
+        }, 0);
+    });
     start();
 }
-async function start() {
-    const { data: { session } } = await sb.auth.getSession();
+async function start(authSession) {
+    const session = authSession || (await sb.auth.getSession()).data.session;
     if (!session) { me = null; login(); return }
     const sameUserAlreadyLoaded = Boolean(me && me.id === session.user.id && prof);
     me = session.user;
@@ -54,21 +70,33 @@ async function load() {
 function login(mode) {
     mode = mode || "in";
     $("who").textContent = ""; $("side").textContent = ""; $("mb").style.display = "none"; const A = $("app"); A.textContent = "";
-    const f = el("form", "card"); f.method = "post"; f.action = "#"; f.autocomplete = "on";
+    const f = el("form", "card"); f.method = "post"; f.action = window.location.pathname; f.autocomplete = "on";
+    f.setAttribute("data-form-type", mode === "in" ? "login" : "register");
     const mk = (type, name, ph, ac) => { const i = el("input"); i.type = type; i.name = name; i.id = "f-" + name; i.placeholder = ph; i.autocomplete = ac; i.required = true; const r = el("div", "row"); r.append(i); f.append(r); return i };
     f.append(el("b", null, mode === "in" ? "Sign in" : "Create account"));
     const nI = mode === "up" ? mk("text", "name", "Your name", "name") : null;
-    const em = mk("text", "email", "Phone number or email", "username");
+    const em = mk("text", "username", "Phone number or email", "username");
+    em.setAttribute("inputmode", "email");
     const pw = mk("password", "password", "Password (6+ characters)", mode === "in" ? "current-password" : "new-password");
+    pw.setAttribute("data-1p-ignore", "false");
     em.setAttribute("autocapitalize", "none"); em.setAttribute("autocorrect", "off");
     const go = el("button", "add", mode === "in" ? "Sign in" : "Create account"); go.type = "submit"; go.style.cssText = "margin-top:8px;width:100%";
     const sw = el("button", "link", mode === "in" ? "New here? Create account" : "Have an account? Sign in"); sw.type = "button"; sw.style.marginTop = "12px";
     sw.onclick = () => { msg(""); login(mode === "in" ? "up" : "in") };
     f.append(go, el("br"), sw);
     f.onsubmit = async ev => {
-        ev.preventDefault(); msg("");
-        if (mode === "in") { const { error } = await sb.auth.signInWithPassword({ email: toEmail(em.value), password: pw.value }); if (error) msg(error.message) }
-        else { const { data, error } = await sb.auth.signUp({ email: toEmail(em.value), password: pw.value, options: { data: { name: nI.value.trim() } } }); if (error) msg(error.message); else if (!data.session) msg("Account created. Confirm the email we sent, then sign in.") }
+        ev.preventDefault(); msg(""); go.disabled = true;
+        try {
+            if (mode === "in") {
+                const { error } = await sb.auth.signInWithPassword({ email: toEmail(em.value), password: pw.value });
+                if (error) msg(error.message);
+            } else {
+                const { data, error } = await sb.auth.signUp({ email: toEmail(em.value), password: pw.value, options: { data: { name: nI.value.trim() } } });
+                if (error) msg(error.message);
+                else if (!data.session) msg("Account created. Confirm the email we sent, then sign in.");
+            }
+        } catch (error) { msg(error.message || "Sign-in failed. Please try again."); }
+        finally { go.disabled = false; }
     };
     A.append(f);
 }
