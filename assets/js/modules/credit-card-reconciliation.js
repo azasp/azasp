@@ -26,6 +26,9 @@ function renderCreditCardReconciliation(host, canEdit) {
         };
     }
     box.append(accountsBox);
+    const repaymentBox = el("div", "card");
+    renderRepaymentLifecycle(repaymentBox);
+    box.append(repaymentBox);
     drawFinancialAccounts(accountsList);
     const list = el("div", "sub", "Loading bills…"); box.append(list);
     if (canEdit) {
@@ -113,5 +116,88 @@ async function drawCreditCardBills(list, canEdit) {
             }
         }
         list.append(row);
+    }
+}
+
+async function renderRepaymentLifecycle(host) {
+    host.append(el("b", null, "🔁 Credit-card repayment lifecycle"));
+    host.append(el("div", "sub", "A bank debit is recorded once. Processor acceptance and issuer credit are separate stages; only issuer credit completes settlement."));
+    const [cardsResult, bankResult, repaymentsResult, billsResult] = await Promise.all([
+        sb.from("financial_accounts").select("id,institution,nickname,account_last4").eq("account_type","credit_card").eq("is_active",true),
+        sb.from("financial_accounts").select("id,institution,nickname,account_last4").eq("account_type","bank").eq("is_active",true),
+        sb.from("credit_card_repayments").select("*").order("payment_date",{ascending:false}).limit(50),
+        sb.from("credit_card_bills").select("*").order("due_date",{ascending:false}).limit(100)
+    ]);
+    for (const x of [cardsResult,bankResult,repaymentsResult,billsResult]) if(x.error){host.append(el("div","sub","Repayment lifecycle unavailable: "+x.error.message));return}
+    const cards=cardsResult.data||[], banks=bankResult.data||[], repayments=repaymentsResult.data||[], bills=billsResult.data||[];
+    const candidates=expenses.filter(x=>!x.is_deleted&&x.transaction_type==="expense"&&Number(x.amount)>0);
+    if (["admin","parent"].includes(role())) {
+        const card=el("select"), bank=el("select"), amount=el("input"), processor=el("input"), reference=el("input"), add=el("button","add","Record bank debit");
+        card.append(el("option",null,"Select credit card…")); card.firstChild.value="";
+        cards.forEach(a=>{const o=el("option",null,a.institution+" · "+a.nickname+" · •••• "+a.account_last4);o.value=a.id;card.append(o)});
+        bank.append(el("option",null,"Select bank debit transaction…")); bank.firstChild.value="";
+        candidates.forEach(x=>{const o=el("option",null,(x.transaction_date||"")+" · "+exMoney(x.amount)+" · "+(x.description||x.merchant||x.account||"Debit"));o.value=x.id;bank.append(o)});
+        amount.type="number";amount.step="0.01";amount.min="0.01";amount.placeholder="Payment amount ₹";
+        bank.onchange=()=>{const x=candidates.find(y=>y.id===bank.value);if(x)amount.value=Number(x.amount).toFixed(2)};
+        processor.placeholder="Processor (e.g. BillDesk)";reference.placeholder="Processor reference (optional)";
+        const fields=el("div","row");fields.append(card,bank,amount,processor,reference,add);host.append(fields);
+        add.onclick=async()=>{
+            const tx=candidates.find(x=>x.id===bank.value),value=Number(amount.value);
+            if(!tx||!card.value||!(value>0)){msg("Select a card, bank debit and valid amount.");return}
+            if(value>Number(tx.amount)+0.01){msg("Repayment amount cannot exceed the linked bank debit.");return}
+            add.disabled=true;
+            const {error}=await sb.from("credit_card_repayments").insert({user_id:me.id,card_account_id:card.value,bank_debit_expense_id:tx.id,amount:value,processor:processor.value.trim()||null,payment_reference:reference.value.trim()||null,payment_date:tx.transaction_date,status:"bank_debited",bank_debited_at:new Date().toISOString()});
+            if(error){add.disabled=false;msg(error.message);return}
+            msg("Bank debit linked. The processor and issuer stages remain unconfirmed.");host.replaceChildren();renderRepaymentLifecycle(host);
+        };
+    }
+    const accountLabel=id=>{const a=cards.find(x=>x.id===id);return a?a.institution+" · "+a.nickname+" ·•••• "+a.account_last4:"Card account"};
+    if(!repayments.length){host.append(el("div","sub","No repayments recorded yet."));return}
+    for(const p of repayments){
+        const box=el("div","item"),left=el("div"),controls=el("div","row");
+        left.append(el("b",null,accountLabel(p.card_account_id)+" · "+exMoney(p.amount)),el("div","sub",(p.payment_date||"")+" · "+(p.processor||"Processor not set")+" · "+(p.payment_reference||"No reference")+" · "+p.status));
+        if(p.status==="bank_debited"){
+            const b=el("button","add","Confirm processor processed");
+            b.onclick=async()=>{if(!confirm("Confirm that the processor accepted/processed this payment (for example, BillDesk confirmation)?"))return;const z=await sb.from("credit_card_repayments").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",p.id);if(z.error)return msg(z.error.message);msg("Processor stage recorded; card credit is still pending.");host.replaceChildren();renderRepaymentLifecycle(host)};
+            controls.append(b);
+        }
+        if(p.status==="processed"){
+            const b=el("button","add","Confirm card issuer credited");
+            b.onclick=async()=>{if(!confirm("Confirm only after an issuer credit SMS or your direct verification that the card account was credited."))return;const z=await sb.from("credit_card_repayments").update({status:"credited",credited_at:new Date().toISOString()}).eq("id",p.id);if(z.error)return msg(z.error.message);msg("Issuer credit confirmed.");host.replaceChildren();renderRepaymentLifecycle(host)};
+            controls.append(b);
+        }
+        box.append(left,controls);
+        if(p.status==="credited"){
+            const alloc=await sb.from("credit_card_payment_allocations").select("*").eq("repayment_id",p.id);
+            if(alloc.error){box.append(el("div","sub",alloc.error.message))}
+            else{
+                const allocated=(alloc.data||[]).reduce((s,x)=>s+Number(x.allocated_amount),0);
+                box.append(el("div","sub","Allocated "+exMoney(allocated)+" of "+exMoney(p.amount)+" · Remaining "+exMoney(Number(p.amount)-allocated)));
+                const billSelect=el("select");billSelect.append(el("option",null,"Select bill…"));billSelect.firstChild.value="";
+                const eligible=[];
+                for(const b of bills){
+                    if(p.card_account_id&&b.card_account_id&&p.card_account_id!==b.card_account_id)continue;
+                    const used=await sb.from("credit_card_payment_allocations").select("allocated_amount").eq("bill_id",b.id);
+                    if(used.error)continue;
+                    const remaining=Number(b.statement_amount)-(used.data||[]).reduce((s,x)=>s+Number(x.allocated_amount),0);
+                    if(remaining>0.009){eligible.push({bill:b,remaining});const o=el("option",null,b.issuer+" · •••• "+b.card_last4+" · remaining "+exMoney(remaining));o.value=b.id;billSelect.append(o)}
+                }
+                const allocation=el("input");allocation.type="number";allocation.step="0.01";allocation.min="0.01";allocation.placeholder="Allocate ₹";
+                const save=el("button","add","Allocate to bill");save.disabled=!eligible.length;
+                save.onclick=async()=>{
+                    const chosen=eligible.find(x=>x.bill.id===billSelect.value),v=Number(allocation.value);
+                    if(!chosen||!(v>0)){msg("Select a bill and enter an allocation.");return}
+                    if(v>Number(p.amount)-allocated+0.001||v>chosen.remaining+0.001){msg("Allocation exceeds the remaining repayment or bill amount.");return}
+                    const existing=(alloc.data||[]).find(x=>x.bill_id===chosen.bill.id);
+                    const z=existing
+                      ? await sb.from("credit_card_payment_allocations").update({allocated_amount:Number(existing.allocated_amount)+v}).eq("id",existing.id)
+                      : await sb.from("credit_card_payment_allocations").insert({user_id:me.id,repayment_id:p.id,bill_id:chosen.bill.id,allocated_amount:v});
+                    if(z.error)return msg(z.error.message);msg("Bill allocation saved.");host.replaceChildren();renderRepaymentLifecycle(host);
+                };
+                const r=el("div","row");r.append(billSelect,allocation,save);box.append(r);
+                (alloc.data||[]).forEach(x=>{const b=bills.find(y=>y.id===x.bill_id);box.append(el("div","sub",(b?b.issuer+" bill":"Bill")+" · allocated "+exMoney(x.allocated_amount)))});
+            }
+        }
+        host.append(box);
     }
 }
