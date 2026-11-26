@@ -24,6 +24,7 @@ begin
       from public.credit_card_bills b
      where b.user_id=auth.uid()
        and exists (select 1 from public.credit_card_payment_allocations a where a.bill_id=b.id and a.repayment_id=r.id)
+     order by b.id
      for update of b
   loop
     update public.credit_card_bills b
