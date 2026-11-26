@@ -1,8 +1,5 @@
 -- Credit-card repayment lifecycle: bank debit -> processor accepted -> card credited.
 -- Supports split payments and multiple partial payments per bill.
-alter table public.expenses
-  add constraint uq_expenses_id_user_repayment unique (id, user_id);
-
 alter table public.credit_card_bills
   add constraint uq_credit_card_bills_id_user_repayment unique (id, user_id);
 
@@ -94,6 +91,7 @@ create table public.credit_card_payment_allocations (
 );
 
 create index ix_cc_alloc_user_bill on public.credit_card_payment_allocations(user_id,bill_id);
+create index ix_cc_alloc_bill_owner on public.credit_card_payment_allocations(bill_id,user_id);
 create index ix_cc_alloc_repayment on public.credit_card_payment_allocations(repayment_id,user_id);
 
 alter table public.credit_card_payment_allocations enable row level security;
