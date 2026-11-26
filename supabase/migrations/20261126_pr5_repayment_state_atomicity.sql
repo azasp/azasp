@@ -8,8 +8,8 @@ begin
   select * into r from public.credit_card_repayments
    where id=p_repayment_id and user_id=auth.uid() for update;
   if not found then raise exception 'Repayment not found'; end if;
-  if (r.status='bank_debited' and p_next_status<>'processed')
-     or (r.status='processed' and p_next_status<>'credited') then
+  if not ((r.status='bank_debited' and p_next_status='processed')
+       or (r.status='processed' and p_next_status='credited')) then
     raise exception 'Invalid repayment state transition from % to %',r.status,p_next_status;
   end if;
   update public.credit_card_repayments
