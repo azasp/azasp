@@ -25,7 +25,8 @@ async function load() {
         sb.from("saved_expense_filters").select("*").eq("is_active", true).order("is_favorite", { ascending: false }).order("display_order").order("name"),
         sb.from("expense_import_batches").select("*").order("created_at", { ascending: false }).limit(20)
     ]);
-    expenses = ex.data || []; expenseCategories = ca.data || []; expenseSubcategories = sc.data || []; savedExpenseFilters = sf.data || [];\n    expenseImportBatches = batches.data || []; expenseBatchLoadError = batches.error ? batches.error.message : "";
+    expenses = ex.data || []; expenseCategories = ca.data || []; expenseSubcategories = sc.data || []; savedExpenseFilters = sf.data || [];
+    expenseImportBatches = batches.data || []; expenseBatchLoadError = batches.error ? batches.error.message : "";
     if (ex.error || ca.error || sc.error || sf.error) expenseLoadError = (ex.error || ca.error || sc.error || sf.error).message;
     else expenseLoadError = "";
 }
