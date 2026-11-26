@@ -1,0 +1,78 @@
+name: PR 5 validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "assets/**"
+      - "supabase/**"
+      - "docs/**"
+      - ".github/workflows/pr5-validation.yml"
+  push:
+    branches:
+      - feature/credit-card-payment-reconciliation
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr5-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-javascript:
+    name: Browser JavaScript syntax
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check application JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' file; do
+            echo "Checking $file"
+            node --check "$file"
+          done < <(find assets/js -type f -name '*.js' -print0)
+
+  edge-functions:
+    name: Supabase Edge Function type checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check Edge Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for entrypoint in \
+            supabase/functions/device-enrollment/index.ts \
+            supabase/functions/family-invitations/index.ts \
+            supabase/functions/sms-import/index.ts
+          do
+            echo "Checking $entrypoint"
+            deno check "$entrypoint"
+          done
+
+  migration-guardrails:
+    name: Migration and security guardrails
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Verify PR 5 migration and function invariants
+        run: node scripts/validate-pr5.mjs
