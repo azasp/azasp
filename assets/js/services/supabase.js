@@ -2,6 +2,7 @@
 async function init() {
     if (typeof SUPABASE_URL === "undefined" || SUPABASE_URL.startsWith("PASTE")) { $("app").append(el("div", "card", "Add your Supabase URL and key in config.js.")); return }
     sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    configureActions({ load, draw, msg, isBusy: () => busy, setBusy: value => { busy = value; } });
     sb.auth.onAuthStateChange((ev, s) => { if (ev === "SIGNED_IN" || ev === "SIGNED_OUT") start() });
     start();
 }
@@ -27,16 +28,7 @@ async function load() {
     if (ex.error || ca.error || sc.error || sf.error) expenseLoadError = (ex.error || ca.error || sc.error || sf.error).message;
     else expenseLoadError = "";
 }
-async function act(query) {
-    if (busy) return;
-    busy = true; msg("Saving…");
-    try {
-        const { error } = await query;
-        if (error) { msg(error.message); return }
-        await load(); draw(); msg("Saved.");
-    } catch (e) { msg(e.message || String(e)) }
-    finally { busy = false }
-}
+
 function login(mode) {
     mode = mode || "in";
     $("who").textContent = ""; $("side").textContent = ""; $("mb").style.display = "none"; const A = $("app"); A.textContent = "";
