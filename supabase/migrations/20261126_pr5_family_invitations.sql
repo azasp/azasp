@@ -10,9 +10,12 @@ drop policy if exists family_members_insert_owner on public.family_members;
 create policy family_members_insert_owner on public.family_members
 for insert to authenticated
 with check (
-  auth_user_id is null and status = 'invited' and role in ('member','viewer')
-  and exists (select 1 from public.families f
+  exists (select 1 from public.families f
     where f.id = family_members.family_id and f.owner_user_id = (select auth.uid()))
+  and (
+    (auth_user_id is null and status = 'invited' and role in ('member','viewer'))
+    or (auth_user_id = (select auth.uid()) and status = 'active' and role = 'admin')
+  )
 );
 
 -- Prevent browser-side activation or account linking. Service-role operations bypass RLS.
