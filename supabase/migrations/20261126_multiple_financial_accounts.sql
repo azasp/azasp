@@ -45,3 +45,6 @@ begin
   end if;
 end $$;
 create index if not exists ix_credit_card_bills_card_account on public.credit_card_bills(user_id,card_account_id,due_date desc);
+
+create index if not exists ix_expenses_financial_account_owner on public.expenses(financial_account_id,user_id) where financial_account_id is not null;
+create index if not exists ix_credit_card_bills_card_account_owner on public.credit_card_bills(card_account_id,user_id) where card_account_id is not null;
