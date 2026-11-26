@@ -50,3 +50,24 @@ begin
 end; $$;
 revoke all on function public.set_credit_card_repayment_status(uuid,text) from public,anon;
 grant execute on function public.set_credit_card_repayment_status(uuid,text) to authenticated;
+
+-- Reconcile legacy manual settlement flags against the canonical repayment ledger.
+update public.credit_card_bills b
+set settlement_confirmed=(
+  coalesce((select sum(a.allocated_amount) from public.credit_card_payment_allocations a where a.bill_id=b.id),0) >= b.statement_amount
+  and exists(select 1 from public.credit_card_payment_allocations a where a.bill_id=b.id)
+  and not exists(
+    select 1 from public.credit_card_payment_allocations a
+    join public.credit_card_repayments r on r.id=a.repayment_id
+    where a.bill_id=b.id and r.status<>'credited'
+  )
+),
+settlement_confirmed_at=case when (
+  coalesce((select sum(a.allocated_amount) from public.credit_card_payment_allocations a where a.bill_id=b.id),0) >= b.statement_amount
+  and exists(select 1 from public.credit_card_payment_allocations a where a.bill_id=b.id)
+  and not exists(
+    select 1 from public.credit_card_payment_allocations a
+    join public.credit_card_repayments r on r.id=a.repayment_id
+    where a.bill_id=b.id and r.status<>'credited'
+  )
+) then coalesce(b.settlement_confirmed_at,now()) else null end;
