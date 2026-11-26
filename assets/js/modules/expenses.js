@@ -41,6 +41,8 @@ function exDate(v) {
 function expensesTab(S, F, L, r) {
     const canEdit = ["admin", "parent"].includes(r);
     if (expenseLoadError) { S.append(el("div", "sub", "Expense data could not load: " + expenseLoadError)); S.append(el("div", "sub", "Check that the consolidated expense SQL migration completed successfully and that the signed-in user owns these rows.")); return }
+    const all = exActive();
+    if (typeof renderCreditCardReconciliation === "function") renderCreditCardReconciliation(S, canEdit);
     // SMS import status: batch history and devices contributing transactions.
     const smsBox = el("div", "card");
     smsBox.append(el("b", null, "📩 SMS import & devices"));
@@ -61,7 +63,6 @@ function expensesTab(S, F, L, r) {
         });
     } else if (!expenseBatchLoadError) smsBox.append(el("div", "sub", "No SMS import batches yet. Historical SMS import will appear here once the iPhone Shortcut is connected."));
     S.append(smsBox);
-    const all = exActive();
     const totalExp = all.filter(x => x.transaction_type === "expense").reduce((a, x) => a + Number(x.amount), 0);
     const totalInc = all.filter(x => x.transaction_type === "income").reduce((a, x) => a + Number(x.amount), 0);
     const summary = el("div"); summary.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:8px";
