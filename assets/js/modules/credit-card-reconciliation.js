@@ -16,7 +16,7 @@ function renderCreditCardReconciliation(host, canEdit) {
         const saveAccount = el("button","add","Add account");
         const accountRow = el("div","row"); accountRow.append(accountType,institution,nickname,accountLast4,saveAccount); accountForm.append(accountRow); accountsBox.append(accountForm);
         saveAccount.onclick = async () => {
-            if (!institution.value.trim() || !nickname.value.trim() || !/^\\d{4}$/.test(accountLast4.value.trim())) { msg("Enter institution, nickname and four digits."); return }
+            if (!institution.value.trim() || !nickname.value.trim() || !/^[0-9]{4}$/.test(accountLast4.value.trim())) { msg("Enter institution, nickname and four digits."); return }
             saveAccount.disabled=true;
             const {error}=await sb.from("financial_accounts").insert({user_id:me.id,account_type:accountType.value,institution:institution.value.trim(),nickname:nickname.value.trim(),account_last4:accountLast4.value.trim()});
             saveAccount.disabled=false;
