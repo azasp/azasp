@@ -33,7 +33,11 @@ Deno.serve(async (req: Request) => {
 
     const deviceSecret = crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
     const [codeHash, deviceSecretHash] = await Promise.all([hash(code), hash(deviceSecret)]);
-    // This RPC claims the one-time code and inserts the pending device/audit row atomically.
+    const forwardedFor = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const rateKey = await hash(forwardedFor + ":" + codeHash);
+    const rate = await db.rpc("consume_device_pairing_attempt", { p_key_hash: rateKey });
+    if (rate.error || rate.data !== true) return json(429, { error: "Too many pairing attempts. Wait 15 minutes and generate a new code if needed." });
+    // This RPC claims the one-time code and inserts the pending device/audit row.
     const registered = await db.rpc("register_paired_device", {
       p_code_hash: codeHash,
       p_device_identifier: deviceIdentifier,
