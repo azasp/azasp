@@ -4,6 +4,33 @@ async function familyDevicesTab(S,F,L){
  let family=null,members=[],devices=[],accounts=[],links=[];
  const f=await sb.from("families").select("*").eq("owner_user_id",me.id).maybeSingle();
  if(f.error){note(S,f.error.message);return} family=f.data;
+
+ // Non-owners discover the workspace through their own active membership.
+ // The families table remains owner-readable only to avoid mutual RLS recursion.
+ if(!family){
+  const own=await sb.from("family_members").select("id,family_id,display_name,role,status")
+   .eq("auth_user_id",me.id).eq("status","active").maybeSingle();
+  if(own.error){note(S,own.error.message);return}
+  if(own.data){
+   const [dr,ar]=await Promise.all([
+    sb.from("family_devices").select("id,device_identifier,device_type,status,created_at")
+     .eq("family_id",own.data.family_id).eq("family_member_id",own.data.id).order("created_at",{ascending:false}),
+    sb.from("financial_accounts").select("id,account_type,institution,nickname,account_last4,is_active")
+     .eq("family_id",own.data.family_id).eq("family_member_id",own.data.id).eq("is_active",true).order("institution")
+   ]);
+   if(dr.error||ar.error){note(S,(dr.error||ar.error).message);return}
+   S.append(el("b",null,"Family workspace · member access"));
+   note(S,"You are an active family member. This view is read-only; the family owner manages members and approved devices.");
+   S.append(el("div","item",own.data.display_name+" · "+own.data.role));
+   S.append(el("b",null,"Your registered devices"));
+   if(!dr.data?.length)note(S,"No devices are registered to your membership.");
+   else dr.data.forEach(d=>S.append(el("div","item",d.device_identifier+" · "+d.device_type+" · "+d.status)));
+   S.append(el("b",null,"Your linked accounts"));
+   if(!ar.data?.length)note(S,"No shared accounts are assigned to your membership.");
+   else ar.data.forEach(a=>S.append(el("div","item",a.institution+" · "+a.nickname+" · "+(a.account_last4?"•••• "+a.account_last4:"")+" · "+a.account_type)));
+   return;
+  }
+ }
  if(!family){
   note(S,"Create your family workspace to manage members and devices.");
   const name=el("input");name.placeholder="Family name";const b=el("button","add","Create workspace");row(S,name,b);
