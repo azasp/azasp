@@ -23,3 +23,30 @@ with check (
 -- Prevent browser-side activation or account linking. Service-role operations bypass RLS.
 drop policy if exists family_members_update_owner on public.family_members;
 revoke update on public.family_members from authenticated;
+
+
+-- Service-role-only helper: avoid inviting an Auth identity that is already a
+-- member of this family (including the owner), which would violate the one-login
+-- per-family constraint when the invitation is accepted.
+create or replace function public.family_has_auth_member_email(
+  p_family_id uuid,
+  p_email text
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public, auth, pg_temp
+as $$
+  select exists (
+    select 1
+    from public.family_members fm
+    join auth.users u on u.id = fm.auth_user_id
+    where fm.family_id = p_family_id
+      and fm.status in ('invited','active','suspended')
+      and lower(u.email) = lower(trim(p_email))
+  );
+$$;
+
+revoke all on function public.family_has_auth_member_email(uuid,text) from public, anon, authenticated;
+grant execute on function public.family_has_auth_member_email(uuid,text) to service_role;
