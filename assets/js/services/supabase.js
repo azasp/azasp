@@ -10,7 +10,13 @@ async function start() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { me = null; login(); return }
     if (me && me.id === session.user.id && prof) return;
-    me = session.user; await load(); draw();
+    me = session.user;
+    // Activate an email-bound invitation only after the invitee authenticates.
+    try {
+        const accepted = await sb.functions.invoke("family-invitations", { body: { action: "accept" } });
+        if (accepted.error) console.warn("Family invitation acceptance check failed:", accepted.error.message);
+    } catch (e) { console.warn("Family invitation acceptance check failed:", e); }
+    await load(); draw();
 }
 async function load() {
     const [k, e, p, m] = await Promise.all([sb.from("kids").select("*").order("created_at"), sb.from("entries").select("*").order("created_at", { ascending: false }), sb.from("profiles").select("*"), sb.from("masters").select("*").order("name")]);
