@@ -9,7 +9,7 @@ async function familyDevicesTab(S,F,L){
  // The families table remains owner-readable only to avoid mutual RLS recursion.
  if(!family){
   const own=await sb.from("family_members").select("id,family_id,display_name,role,status")
-   .eq("auth_user_id",me.id).eq("status","active").maybeSingle();
+   .eq("auth_user_id",me.id).eq("status","active").order("created_at",{ascending:false}).limit(1).maybeSingle();
   if(own.error){note(S,own.error.message);return}
   if(own.data){
    const [dr,ar]=await Promise.all([
@@ -63,7 +63,7 @@ async function familyDevicesTab(S,F,L){
   mb.disabled=false;
   if(result.error)return msg("Invitation failed: "+result.error.message);
   mn.value="";mi.value="";
-  msg("Invitation email sent. The member must open it, sign in, and accept before family access is enabled.");
+  msg(result.data?.delivery==="sign_in_link"?"Sign-in email sent to the existing account. The member must sign in and accept before family access is enabled.":"Invitation email sent. The member must open it, sign in, and accept before family access is enabled.");
   draw();
  };
  members.forEach(m=>S.append(el("div","item",m.display_name+" · "+m.role+" · "+m.status)));
