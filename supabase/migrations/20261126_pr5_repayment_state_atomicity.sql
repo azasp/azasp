@@ -77,3 +77,15 @@ revoke update on public.credit_card_repayments from authenticated;
 revoke insert,update,delete on public.credit_card_payment_allocations from authenticated;
 revoke update on public.credit_card_bills from authenticated;
 grant select on public.credit_card_repayments, public.credit_card_payment_allocations, public.credit_card_bills to authenticated;
+
+-- New repayment records may start only at the bank-debit stage; issuer credit is RPC-only.
+drop policy if exists cc_repayments_insert_own on public.credit_card_repayments;
+create policy cc_repayments_insert_own on public.credit_card_repayments
+  for insert to authenticated
+  with check (user_id=(select auth.uid()) and status in ('initiated','bank_debited'));
+
+-- A bill cannot be created already settled by a client.
+drop policy if exists credit_card_bills_insert_own on public.credit_card_bills;
+create policy credit_card_bills_insert_own on public.credit_card_bills
+  for insert to authenticated
+  with check (user_id=(select auth.uid()) and settlement_confirmed=false);
