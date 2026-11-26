@@ -47,8 +47,8 @@ Deno.serve(async (req) => {
       data: { family_invitation: true, family_id: familyId, display_name: displayName },
     });
 
-    let invitedUserId: string | null = inviteData.user?.id || null;
-    let createdAuthUser = Boolean(inviteData.user?.id);
+    let invitedUserId: string | null = inviteData?.user?.id || null;
+    const createdAuthUser = Boolean(inviteData?.user?.id);
     if (inviteError) {
       // Existing Auth users cannot receive inviteUserByEmail. Send a sign-in OTP instead;
       // keep the membership unlinked until that user authenticates with this exact email.
