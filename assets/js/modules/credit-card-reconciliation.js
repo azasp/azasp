@@ -192,7 +192,17 @@ async function renderRepaymentLifecycle(host) {
                     const z=existing
                       ? await sb.from("credit_card_payment_allocations").update({allocated_amount:Number(existing.allocated_amount)+v}).eq("id",existing.id)
                       : await sb.from("credit_card_payment_allocations").insert({user_id:me.id,repayment_id:p.id,bill_id:chosen.bill.id,allocated_amount:v});
-                    if(z.error)return msg(z.error.message);msg("Bill allocation saved.");host.replaceChildren();renderRepaymentLifecycle(host);
+                    if(z.error)return msg(z.error.message);
+                    const allAlloc=await sb.from("credit_card_payment_allocations").select("allocated_amount,repayment_id").eq("bill_id",chosen.bill.id);
+                    if(!allAlloc.error){
+                        const paid=allAlloc.data.reduce((s,x)=>s+Number(x.allocated_amount),0);
+                        const ids=[...new Set(allAlloc.data.map(x=>x.repayment_id))];
+                        const stages=ids.length?await sb.from("credit_card_repayments").select("id,status").in("id",ids):{data:[]};
+                        if(paid+0.001>=Number(chosen.bill.statement_amount)&&!stages.error&&(stages.data||[]).every(x=>x.status==="credited")){
+                            await sb.from("credit_card_bills").update({settlement_confirmed:true,settlement_confirmed_at:new Date().toISOString()}).eq("id",chosen.bill.id);
+                        }
+                    }
+                    msg("Bill allocation saved.");host.replaceChildren();renderRepaymentLifecycle(host);
                 };
                 const r=el("div","row");r.append(billSelect,allocation,save);box.append(r);
                 (alloc.data||[]).forEach(x=>{const b=bills.find(y=>y.id===x.bill_id);box.append(el("div","sub",(b?b.issuer+" bill":"Bill")+" · allocated "+exMoney(x.allocated_amount)))});
