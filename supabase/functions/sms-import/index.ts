@@ -43,10 +43,13 @@ Deno.serve(async (req: Request) => {
   if (!url || !anonKey || !serviceKey) return json(500, { error: "Server configuration is incomplete" });
 
   const authClient = createClient(url, anonKey, { auth: { persistSession: false, autoRefreshToken: false }, global: { headers: { Authorization: `Bearer ${token}` } } });
-  const { data: authData, error: authError } = await authClient.auth.getUser();
-  if (authError || !authData.user) return json(401, { error: "Invalid session" });
-  const userId = authData.user.id;
+  const { data: authData } = await authClient.auth.getUser();
+  const userId = authData?.user?.id || null;
   const db = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
+  const deviceCredentialHash = await sha256(token);
+  const { data: credentialDevice } = userId ? { data: null } : await db.from("family_devices")
+    .select("id").eq("device_secret_hash", deviceCredentialHash).maybeSingle();
+  if (!userId && !credentialDevice) return json(401, { error: "Invalid user session or device credential" });
 
   let payload: any;
   try { payload = await req.json(); } catch { return json(400, { error: "Invalid JSON" }); }
@@ -64,7 +67,9 @@ Deno.serve(async (req: Request) => {
     db.from("family_members").select("id,auth_user_id,status").eq("id", device.family_member_id).single()
   ]);
   if (!family || !member || member.status !== "active") return json(403, { error: "Device owner is not an active family member" });
-  if (family.owner_user_id !== userId && member.auth_user_id !== userId)
+  if (credentialDevice && credentialDevice.id !== device.id)
+    return json(403, { error: "Device credential does not match the requested device" });
+  if (!credentialDevice && family.owner_user_id !== userId && member.auth_user_id !== userId)
     return json(403, { error: "You are not authorised to import for this device" });
 
   const normalized = [];
@@ -132,6 +137,6 @@ Deno.serve(async (req: Request) => {
     status: "completed", processed_messages: normalized.length, imported_transactions: imported,
     skipped_messages: skipped, failed_messages: 0, completed_at: new Date().toISOString()
   }).eq("id", batchId);
-  await db.from("family_devices").update({ last_import_at: new Date().toISOString() }).eq("id", device.id);
+  await db.from("family_devices").update({ last_import_at: new Date().toISOString(), ...(credentialDevice ? { device_secret_last_used_at: new Date().toISOString() } : {}) }).eq("id", device.id);
   return json(200, { batch_id: batchId, received: normalized.length, new_messages: fresh.length, imported_transactions: imported, skipped_messages: skipped, repayment_events: fresh.filter(x => x.event_kind.startsWith("card_payment_")).length, message_bodies_stored: false });
 });
