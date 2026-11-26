@@ -137,19 +137,30 @@ async function renderRepaymentLifecycle(host) {
         card.append(el("option",null,"Select credit card…")); card.firstChild.value="";
         cards.forEach(a=>{const o=el("option",null,a.institution+" · "+a.nickname+" · •••• "+a.account_last4);o.value=a.id;card.append(o)});
         bank.append(el("option",null,"Select bank debit transaction…")); bank.firstChild.value="";
-        candidates.forEach(x=>{const o=el("option",null,(x.transaction_date||"")+" · "+exMoney(x.amount)+" · "+(x.description||x.merchant||x.account||"Bank debit"));o.value="expense:"+x.id;bank.append(o)});\n        smsDebits.forEach(x=>{const o=el("option",null,new Date(x.received_at).toLocaleDateString()+" · "+exMoney(x.amount)+" · SMS "+(x.sender||"BillDesk transfer"));o.value="sms:"+x.id;bank.append(o)});
+        candidates.forEach(x=>{const o=el("option",null,(x.transaction_date||"")+" · "+exMoney(x.amount)+" · "+(x.description||x.merchant||x.account||"Bank debit"));o.value="expense:"+x.id;bank.append(o)});
+        smsDebits.forEach(x=>{const o=el("option",null,new Date(x.received_at).toLocaleDateString()+" · "+exMoney(x.amount)+" · SMS "+(x.sender||"BillDesk transfer"));o.value="sms:"+x.id;bank.append(o)});
         amount.type="number";amount.step="0.01";amount.min="0.01";amount.placeholder="Payment amount ₹";
         bank.onchange=()=>{const [kind,id]=bank.value.split(":");const x=kind==="sms"?smsDebits.find(y=>y.id===id):candidates.find(y=>y.id===id);if(x)amount.value=Number(x.amount).toFixed(2)};
         processor.placeholder="Processor (e.g. BillDesk)";reference.placeholder="Processor reference (optional)";
         const fields=el("div","row");fields.append(card,bank,amount,processor,reference,add);host.append(fields);
         add.onclick=async()=>{
-            const tx=candidates.find(x=>x.id===bank.value),value=Number(amount.value);
-            if(!tx||!card.value||!(value>0)){msg("Select a card, bank debit and valid amount.");return}
-            if(value>Number(tx.amount)+0.01){msg("Repayment amount cannot exceed the linked bank debit.");return}
+            const [kind,id]=bank.value.split(":");
+            const tx=kind==="expense"?candidates.find(x=>x.id===id):null;
+            const sms=kind==="sms"?smsDebits.find(x=>x.id===id):null;
+            const source=tx||sms,value=Number(amount.value);
+            if(!source||!card.value||!(value>0)){msg("Select a card, bank debit and valid amount.");return}
+            if(value>Number(source.amount)+0.01){msg("Repayment amount cannot exceed the linked bank debit.");return}
             add.disabled=true;
-            const {error}=await sb.from("credit_card_repayments").insert({user_id:me.id,card_account_id:card.value,bank_debit_expense_id:tx.id,amount:value,processor:processor.value.trim()||null,payment_reference:reference.value.trim()||null,payment_date:tx.transaction_date,status:"bank_debited",bank_debited_at:new Date().toISOString()});
+            const {error}=await sb.from("credit_card_repayments").insert({
+                user_id:me.id,card_account_id:card.value,bank_debit_expense_id:tx?.id||null,
+                bank_message_hash:sms?.message_hash||null,amount:value,processor:processor.value.trim()||null,
+                payment_reference:reference.value.trim()||sms?.payment_reference||null,
+                payment_date:tx?.transaction_date||sms?.received_at.slice(0,10),
+                status:"bank_debited",bank_debited_at:sms?.received_at||new Date().toISOString()
+            });
             if(error){add.disabled=false;msg(error.message);return}
-            msg("Bank debit linked. The processor and issuer stages remain unconfirmed.");host.replaceChildren();renderRepaymentLifecycle(host);
+            msg("Bank debit linked. The processor and issuer stages remain unconfirmed.");
+            host.replaceChildren();renderRepaymentLifecycle(host);
         };
     }
     const accountLabel=id=>{const a=cards.find(x=>x.id===id);return a?a.institution+" · "+a.nickname+" ·•••• "+a.account_last4:"Card account"};
