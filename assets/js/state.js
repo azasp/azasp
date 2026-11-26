@@ -13,4 +13,4 @@ const KMAP = { money: "category", stars: "reason", shop: "item", classes: "class
 const MK = { class: ["Classes", ""], item: ["Shopping items", "Default price ₹"], reason: ["Star reasons", "Stars (use − to deduct)"], reward: ["Star rewards (redeem)", "Cost in stars"], rate: ["Star → money rate", ""], category: ["Money categories", ""], medicine: ["Medicines", ""] };
 const ALLOW = { admin: ["over", "money", "stars", "rewards", "shop", "classes", "health", "masters", "people", "expenses", "profile"], parent: ["over", "money", "stars", "rewards", "shop", "classes", "health", "expenses", "profile"], teacher: ["classes", "health", "profile"], child: ["money", "stars", "rewards", "profile"], pending: [] };
 let openM = {}, sb, me, prof, masters = [], kids = [], items = [], profs = [], tab = "", kid = null, busy = false;
-let expenses = [], expenseCategories = [], expenseSubcategories = [], savedExpenseFilters = [], expenseLoadError = "";
+let expenses = [], expenseCategories = [], expenseSubcategories = [], savedExpenseFilters = [], expenseLoadError = "";\nlet expenseImportBatches = [], expenseBatchLoadError = "";

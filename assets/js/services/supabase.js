@@ -2,6 +2,7 @@
 async function init() {
     if (typeof SUPABASE_URL === "undefined" || SUPABASE_URL.startsWith("PASTE")) { $("app").append(el("div", "card", "Add your Supabase URL and key in config.js.")); return }
     sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    configureActions({ load, draw, msg, isBusy: () => busy, setBusy: value => { busy = value; } });
     sb.auth.onAuthStateChange((ev, s) => { if (ev === "SIGNED_IN" || ev === "SIGNED_OUT") start() });
     start();
 }
@@ -17,26 +18,17 @@ async function load() {
     kids = k.data || []; items = e.data || []; profs = p.data || []; masters = m.data || []; prof = profs.find(x => x.id === me.id) || null;
     if (prof && prof.role === "admin" && !kids.length) { await sb.from("kids").insert({ name: "My child" }); const r = await sb.from("kids").select("*"); kids = r.data || [] }
     // Expense tables are created by the consolidated MyTracker expense SQL migration.
-    const [ex, ca, sc, sf] = await Promise.all([
+    const [ex, ca, sc, sf, batches] = await Promise.all([
         sb.from("expenses").select("*").order("transaction_date", { ascending: false }),
         sb.from("expense_categories").select("*").eq("is_active", true).order("display_order").order("name"),
         sb.from("expense_subcategories").select("*").eq("is_active", true).order("display_order").order("name"),
         sb.from("saved_expense_filters").select("*").eq("is_active", true).order("is_favorite", { ascending: false }).order("display_order").order("name")
     ]);
-    expenses = ex.data || []; expenseCategories = ca.data || []; expenseSubcategories = sc.data || []; savedExpenseFilters = sf.data || [];
+    expenses = ex.data || []; expenseCategories = ca.data || []; expenseSubcategories = sc.data || []; savedExpenseFilters = sf.data || [];\n    expenseImportBatches = batches.data || []; expenseBatchLoadError = batches.error ? batches.error.message : "";
     if (ex.error || ca.error || sc.error || sf.error) expenseLoadError = (ex.error || ca.error || sc.error || sf.error).message;
     else expenseLoadError = "";
 }
-async function act(query) {
-    if (busy) return;
-    busy = true; msg("Saving…");
-    try {
-        const { error } = await query;
-        if (error) { msg(error.message); return }
-        await load(); draw(); msg("Saved.");
-    } catch (e) { msg(e.message || String(e)) }
-    finally { busy = false }
-}
+
 function login(mode) {
     mode = mode || "in";
     $("who").textContent = ""; $("side").textContent = ""; $("mb").style.display = "none"; const A = $("app"); A.textContent = "";
