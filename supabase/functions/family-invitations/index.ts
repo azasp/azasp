@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
       return json({ error: "Only the family owner can invite members" }, 403);
 
     const { data: existing } = await admin.from("family_members").select("id")
-      .eq("family_id", familyId).ilike("invited_email", email).maybeSingle();
+      .eq("family_id", familyId).eq("invited_email", email).limit(1).maybeSingle();
     if (existing) return json({ error: "This email already has a family invitation" }, 409);
 
     const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
@@ -82,16 +82,22 @@ Deno.serve(async (req) => {
   if (body.action === "accept") {
     const email = userData.user.email.toLowerCase();
     const { data: pending, error: pendingError } = await admin.from("family_members")
-      .select("id,auth_user_id,invited_email").eq("status", "invited").ilike("invited_email", email);
+      .select("id,auth_user_id,invited_email").eq("status", "invited").eq("invited_email", email);
     if (pendingError) return json({ error: pendingError.message }, 500);
     const matches = (pending || []).filter((m) => !m.auth_user_id || m.auth_user_id === userData.user.id);
-    if (!matches.length) return json({ success: true, accepted: 0 });
-    const { error: updateError } = await admin.from("family_members")
-      .update({ auth_user_id: userData.user.id, status: "active", updated_at: new Date().toISOString() })
-      .in("id", matches.map((m) => m.id))
-      .in("auth_user_id", [userData.user.id, null]).eq("status", "invited");
-    if (updateError) return json({ error: updateError.message }, 500);
-    return json({ success: true, accepted: matches.length });
+    let acceptedCount = 0;
+    for (const invitation of matches) {
+      let update = admin.from("family_members")
+        .update({ auth_user_id: userData.user.id, status: "active", updated_at: new Date().toISOString() })
+        .eq("id", invitation.id).eq("status", "invited");
+      update = invitation.auth_user_id
+        ? update.eq("auth_user_id", userData.user.id)
+        : update.is("auth_user_id", null);
+      const { data: changed, error: updateError } = await update.select("id");
+      if (updateError) return json({ error: updateError.message }, 500);
+      acceptedCount += changed?.length || 0;
+    }
+    return json({ success: true, accepted: acceptedCount });
   }
   return json({ error: "Unsupported action" }, 400);
 });
