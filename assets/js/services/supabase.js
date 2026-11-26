@@ -13,11 +13,13 @@ async function start() {
     me = session.user;
     // Check acceptance even for an already-loaded session: an existing user may
     // authenticate an invitation OTP in the same browser without changing user ID.
+    let acceptedInvitation = false;
     try {
         const accepted = await sb.functions.invoke("family-invitations", { body: { action: "accept" } });
         if (accepted.error) console.warn("Family invitation acceptance check failed:", accepted.error.message);
+        else acceptedInvitation = (accepted.data?.accepted || 0) > 0;
     } catch (e) { console.warn("Family invitation acceptance check failed:", e); }
-    if (sameUserAlreadyLoaded) return;
+    if (sameUserAlreadyLoaded) { if (acceptedInvitation) draw(); return; }
     await load(); draw();
 }
 async function load() {
