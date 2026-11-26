@@ -100,9 +100,23 @@ Deno.serve(async (req: Request) => {
     await db.from("expense_import_batches").update({ status: "failed", failed_messages: normalized.length, completed_at: new Date().toISOString() }).eq("id", batchId);
     return json(500, { error: "Could not store import events", detail: inserted.error.message });
   }
-  const newHashes = new Set((inserted.data || []).map(x => x.message_hash));
-  const fresh = normalized.filter(x => newHashes.has(x.message_hash));
-  const transactions = fresh.filter(x => x.event_kind === "expense_debit" || x.event_kind === "income_credit");
+  // Re-read all submitted events, including duplicates, so a previous partial run can resume
+  // materialization when the event exists but its expense link was never written.
+  const hashes = normalized.map(x => x.message_hash);
+  const stored = await db.from("sms_import_events")
+    .select("id,message_hash,linked_expense_id,event_kind,amount,account_last4,received_at,sender")
+    .eq("device_id", device.id).in("message_hash", hashes);
+  if (stored.error) {
+    await db.from("expense_import_batches").update({ status: "partial", failed_messages: normalized.length, completed_at: new Date().toISOString() }).eq("id", batchId);
+    return json(500, { error: "Events saved but could not resume transaction materialization", detail: stored.error.message, batch_id: batchId });
+  }
+  const storedByHash = new Map((stored.data || []).map(x => [x.message_hash, x]));
+  const fresh = normalized.filter(x => (inserted.data || []).some(e => e.message_hash === x.message_hash));
+  const pending = normalized.filter(x => {
+    const event = storedByHash.get(x.message_hash);
+    return event && !event.linked_expense_id;
+  });
+  const transactions = pending.filter(x => x.event_kind === "expense_debit" || x.event_kind === "income_credit");
   const accountsResult = await db.from("financial_accounts").select("id,account_type,account_last4").eq("family_id", family.id).eq("is_active", true);
   const accounts = accountsResult.data || [];
   const expenseRows = transactions.map(x => {
@@ -120,19 +134,36 @@ Deno.serve(async (req: Request) => {
   });
   let imported = 0;
   if (expenseRows.length) {
-    const saved = await db.from("expenses").upsert(expenseRows, { onConflict: "source_family_device_id,source_message_hash", ignoreDuplicates: true }).select("id,source_message_hash");
+    // Upsert is idempotent. Read back by unique source key so a prior successful insert
+    // followed by a failed event-link update is also repaired on retry.
+    const saved = await db.from("expenses").upsert(expenseRows, {
+      onConflict: "source_family_device_id,source_message_hash", ignoreDuplicates: true
+    });
     if (saved.error) {
       await db.from("expense_import_batches").update({ status: "partial", failed_messages: expenseRows.length, completed_at: new Date().toISOString() }).eq("id", batchId);
       return json(500, { error: "Events saved but transactions could not be imported", detail: saved.error.message, batch_id: batchId });
     }
-    imported = saved.data?.length || 0;
-    const byHash = new Map((saved.data || []).map(x => [x.source_message_hash, x.id]));
-    for (const event of inserted.data || []) {
-      const expenseId = byHash.get(event.message_hash);
-      if (expenseId) await db.from("sms_import_events").update({ linked_expense_id: expenseId }).eq("id", event.id);
+    const materialized = await db.from("expenses").select("id,source_message_hash")
+      .eq("source_family_device_id", device.id).in("source_message_hash", expenseRows.map(x => x.source_message_hash));
+    if (materialized.error) {
+      await db.from("expense_import_batches").update({ status: "partial", failed_messages: expenseRows.length, completed_at: new Date().toISOString() }).eq("id", batchId);
+      return json(500, { error: "Transactions saved but links could not be verified", detail: materialized.error.message, batch_id: batchId });
     }
+    const byHash = new Map((materialized.data || []).map(x => [x.source_message_hash, x.id]));
+    for (const event of stored.data || []) {
+      const expenseId = byHash.get(event.message_hash);
+      if (expenseId && !event.linked_expense_id) {
+        const linked = await db.from("sms_import_events").update({ linked_expense_id: expenseId })
+          .eq("id", event.id).is("linked_expense_id", null);
+        if (linked.error) {
+          await db.from("expense_import_batches").update({ status: "partial", failed_messages: 1, completed_at: new Date().toISOString() }).eq("id", batchId);
+          return json(500, { error: "Transaction saved but event link could not be completed", detail: linked.error.message, batch_id: batchId });
+        }
+      }
+    }
+    imported = materialized.data?.length || 0;
   }
-  const skipped = fresh.length - transactions.length + (normalized.length - fresh.length);
+  const skipped = normalized.length - transactions.length;
   await db.from("expense_import_batches").update({
     status: "completed", processed_messages: normalized.length, imported_transactions: imported,
     skipped_messages: skipped, failed_messages: 0, completed_at: new Date().toISOString()
