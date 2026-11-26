@@ -69,6 +69,11 @@ async function familyDevicesTab(S,F,L){
   z=await sb.from("financial_account_devices").upsert({family_id:family.id,financial_account_id:a.id,device_id:d.id,discovery_source:"manual",is_active:true},{onConflict:"financial_account_id,device_id"});
   if(z.error)return msg(z.error.message);msg("Account linked.");draw();
  };
+ L.append(el("b",null,"Recent SMS events (message text is not stored)"));
+ const events=await sb.from("sms_import_events").select("id,device_id,sender,received_at,event_kind,amount,account_last4,payment_reference").eq("family_id",family.id).order("received_at",{ascending:false}).limit(30);
+ if(events.error)note(L,events.error.message);
+ else if(!events.data?.length)note(L,"No SMS events imported yet.");
+ else events.data.forEach(x=>{const d=devices.find(y=>y.id===x.device_id);const detail=[x.sender||"SMS",d?.device_identifier||"Device",x.amount?exMoney(x.amount):"No amount",x.account_last4?"•••• "+x.account_last4:"",x.payment_reference||""].filter(Boolean).join(" · ");L.append(el("div","item",x.event_kind+" · "+detail+" · "+new Date(x.received_at).toLocaleString()))});
  L.append(el("b",null,"Recent device audit"));
  const au=await sb.from("family_device_audit").select("*").eq("family_id",family.id).order("created_at",{ascending:false}).limit(25);
  if(au.error)note(L,au.error.message);else if(!au.data?.length)note(L,"No audit events yet.");else au.data.forEach(x=>L.append(el("div","item",x.action+" · "+new Date(x.created_at).toLocaleString())));
