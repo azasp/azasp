@@ -36,7 +36,7 @@ Do not deploy the Edge Functions before applying these migrations. The device en
 - Test partial/split allocations, concurrent allocations, over-allocation, wrong-card allocation, partial repayment, and issuer-credit transitions.
 - Confirm a bill remains unsettled until the full amount is allocated and every contributing repayment is credited.
 - Test family creation after applying the invitation migration; verify the owner can still create their own active admin membership but cannot create a linked active member for another user.
-- Test new-account invitation, existing-account OTP invitation, wrong-email rejection, duplicate pending invitation, concurrent duplicate invite requests for the same family/email, the same email invited by two different families, concurrent acceptance, and accepted member access.
+- Test new-account invitation, existing-account OTP invitation, wrong-email rejection, rejection of an email already active in the same family, duplicate pending invitation, concurrent duplicate invite requests for the same family/email, the same email invited by two different families, concurrent acceptance, and accepted member access.
 - Verify an invited (not yet accepted) account cannot read family devices, linked accounts, SMS events or family expenses; verify an accepted member can read only their own devices/accounts where the policies scope by family member.
 - Verify non-owner Family & devices UI is read-only and does not expose invite, approve, suspend, revoke, or account-reassignment controls.
 - Run authenticated family-isolation/RLS tests and actual iPhone Shortcut tests.
