@@ -122,23 +122,24 @@ async function drawCreditCardBills(list, canEdit) {
 async function renderRepaymentLifecycle(host) {
     host.append(el("b", null, "🔁 Credit-card repayment lifecycle"));
     host.append(el("div", "sub", "A bank debit is recorded once. Processor acceptance and issuer credit are separate stages; only issuer credit completes settlement."));
-    const [cardsResult, bankResult, repaymentsResult, billsResult] = await Promise.all([
+    const [cardsResult, bankResult, repaymentsResult, billsResult, smsDebitResult] = await Promise.all([
         sb.from("financial_accounts").select("id,institution,nickname,account_last4").eq("account_type","credit_card").eq("is_active",true),
         sb.from("financial_accounts").select("id,institution,nickname,account_last4").eq("account_type","bank").eq("is_active",true),
         sb.from("credit_card_repayments").select("*").order("payment_date",{ascending:false}).limit(50),
-        sb.from("credit_card_bills").select("*").order("due_date",{ascending:false}).limit(100)
+        sb.from("credit_card_bills").select("*").order("due_date",{ascending:false}).limit(100),
+        sb.from("sms_import_events").select("id,message_hash,amount,received_at,payment_reference,sender").eq("event_kind","card_payment_bank_debit").order("received_at",{ascending:false}).limit(100)
     ]);
-    for (const x of [cardsResult,bankResult,repaymentsResult,billsResult]) if(x.error){host.append(el("div","sub","Repayment lifecycle unavailable: "+x.error.message));return}
-    const cards=cardsResult.data||[], banks=bankResult.data||[], repayments=repaymentsResult.data||[], bills=billsResult.data||[];
+    for (const x of [cardsResult,bankResult,repaymentsResult,billsResult,smsDebitResult]) if(x.error){host.append(el("div","sub","Repayment lifecycle unavailable: "+x.error.message));return}
+    const cards=cardsResult.data||[], banks=bankResult.data||[], repayments=repaymentsResult.data||[], bills=billsResult.data||[], smsDebits=smsDebitResult.data||[];
     const candidates=expenses.filter(x=>!x.is_deleted&&x.transaction_type==="expense"&&Number(x.amount)>0);
     if (["admin","parent"].includes(role())) {
         const card=el("select"), bank=el("select"), amount=el("input"), processor=el("input"), reference=el("input"), add=el("button","add","Record bank debit");
         card.append(el("option",null,"Select credit card…")); card.firstChild.value="";
         cards.forEach(a=>{const o=el("option",null,a.institution+" · "+a.nickname+" · •••• "+a.account_last4);o.value=a.id;card.append(o)});
         bank.append(el("option",null,"Select bank debit transaction…")); bank.firstChild.value="";
-        candidates.forEach(x=>{const o=el("option",null,(x.transaction_date||"")+" · "+exMoney(x.amount)+" · "+(x.description||x.merchant||x.account||"Debit"));o.value=x.id;bank.append(o)});
+        candidates.forEach(x=>{const o=el("option",null,(x.transaction_date||"")+" · "+exMoney(x.amount)+" · "+(x.description||x.merchant||x.account||"Bank debit"));o.value="expense:"+x.id;bank.append(o)});\n        smsDebits.forEach(x=>{const o=el("option",null,new Date(x.received_at).toLocaleDateString()+" · "+exMoney(x.amount)+" · SMS "+(x.sender||"BillDesk transfer"));o.value="sms:"+x.id;bank.append(o)});
         amount.type="number";amount.step="0.01";amount.min="0.01";amount.placeholder="Payment amount ₹";
-        bank.onchange=()=>{const x=candidates.find(y=>y.id===bank.value);if(x)amount.value=Number(x.amount).toFixed(2)};
+        bank.onchange=()=>{const [kind,id]=bank.value.split(":");const x=kind==="sms"?smsDebits.find(y=>y.id===id):candidates.find(y=>y.id===id);if(x)amount.value=Number(x.amount).toFixed(2)};
         processor.placeholder="Processor (e.g. BillDesk)";reference.placeholder="Processor reference (optional)";
         const fields=el("div","row");fields.append(card,bank,amount,processor,reference,add);host.append(fields);
         add.onclick=async()=>{
