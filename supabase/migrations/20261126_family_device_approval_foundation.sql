@@ -93,20 +93,11 @@ using (
   or exists (select 1 from public.families f where f.id=family_members.family_id and f.owner_user_id=(select auth.uid()))
   or exists (select 1 from public.family_members admin where admin.family_id=family_members.family_id and admin.auth_user_id=(select auth.uid()) and admin.role='admin' and admin.status='active')
 );
-create policy family_members_insert_admin on public.family_members for insert to authenticated
-with check (
-  exists (select 1 from public.families f where f.id=family_members.family_id and f.owner_user_id=(select auth.uid()))
-  or exists (select 1 from public.family_members admin where admin.family_id=family_members.family_id and admin.auth_user_id=(select auth.uid()) and admin.role='admin' and admin.status='active')
-);
-create policy family_members_update_admin on public.family_members for update to authenticated
-using (
-  exists (select 1 from public.families f where f.id=family_members.family_id and f.owner_user_id=(select auth.uid()))
-  or exists (select 1 from public.family_members admin where admin.family_id=family_members.family_id and admin.auth_user_id=(select auth.uid()) and admin.role='admin' and admin.status='active')
-)
-with check (
-  exists (select 1 from public.families f where f.id=family_members.family_id and f.owner_user_id=(select auth.uid()))
-  or exists (select 1 from public.family_members admin where admin.family_id=family_members.family_id and admin.auth_user_id=(select auth.uid()) and admin.role='admin' and admin.status='active')
-);
+create policy family_members_insert_owner on public.family_members for insert to authenticated
+with check (exists (select 1 from public.families f where f.id=family_members.family_id and f.owner_user_id=(select auth.uid())));
+create policy family_members_update_owner on public.family_members for update to authenticated
+using (exists (select 1 from public.families f where f.id=family_members.family_id and f.owner_user_id=(select auth.uid())))
+with check (exists (select 1 from public.families f where f.id=family_members.family_id and f.owner_user_id=(select auth.uid())));
 
 create policy family_devices_select_member on public.family_devices for select to authenticated
 using (
@@ -121,28 +112,14 @@ with check (
   and registered_by=(select auth.uid())
   and exists (select 1 from public.family_members fm where fm.id=family_devices.family_member_id and fm.family_id=family_devices.family_id and fm.auth_user_id=(select auth.uid()) and fm.status='active')
 );
-create policy family_devices_admin_update on public.family_devices for update to authenticated
-using (
-  exists (select 1 from public.families f where f.id=family_devices.family_id and f.owner_user_id=(select auth.uid()))
-  or exists (select 1 from public.family_members admin where admin.family_id=family_devices.family_id and admin.auth_user_id=(select auth.uid()) and admin.role='admin' and admin.status='active')
-)
-with check (
-  exists (select 1 from public.families f where f.id=family_devices.family_id and f.owner_user_id=(select auth.uid()))
-  or exists (select 1 from public.family_members admin where admin.family_id=family_devices.family_id and admin.auth_user_id=(select auth.uid()) and admin.role='admin' and admin.status='active')
-);
+create policy family_devices_owner_update on public.family_devices for update to authenticated
+using (exists (select 1 from public.families f where f.id=family_devices.family_id and f.owner_user_id=(select auth.uid())))
+with check (exists (select 1 from public.families f where f.id=family_devices.family_id and f.owner_user_id=(select auth.uid())));
 
-create policy family_device_audit_select_admin on public.family_device_audit for select to authenticated
-using (
-  exists (select 1 from public.families f where f.id=family_device_audit.family_id and f.owner_user_id=(select auth.uid()))
-  or exists (select 1 from public.family_members admin where admin.family_id=family_device_audit.family_id and admin.auth_user_id=(select auth.uid()) and admin.role='admin' and admin.status='active')
-);
-create policy family_device_audit_insert_admin on public.family_device_audit for insert to authenticated
-with check (
-  actor_user_id=(select auth.uid()) and (
-    exists (select 1 from public.families f where f.id=family_device_audit.family_id and f.owner_user_id=(select auth.uid()))
-    or exists (select 1 from public.family_members admin where admin.family_id=family_device_audit.family_id and admin.auth_user_id=(select auth.uid()) and admin.role='admin' and admin.status='active')
-  )
-);
+create policy family_device_audit_select_owner on public.family_device_audit for select to authenticated
+using (exists (select 1 from public.families f where f.id=family_device_audit.family_id and f.owner_user_id=(select auth.uid())));
+create policy family_device_audit_insert_owner on public.family_device_audit for insert to authenticated
+with check (actor_user_id=(select auth.uid()) and exists (select 1 from public.families f where f.id=family_device_audit.family_id and f.owner_user_id=(select auth.uid())));
 
 grant select,insert,update on public.families to authenticated;
 grant select,insert,update on public.family_members to authenticated;
