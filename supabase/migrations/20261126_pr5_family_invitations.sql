@@ -1,7 +1,9 @@
 -- Email-bound family invitations. Membership remains invited until the authenticated invitee accepts.
 alter table public.family_members add column if not exists invited_email text;
-create index if not exists ix_family_members_pending_invitation
-  on public.family_members (lower(invited_email), created_at desc)
+-- Prevent two concurrent owner requests from creating duplicate pending invitations
+-- for the same email in one family. The same email may belong to different families.
+create unique index if not exists uq_family_members_pending_invitation_email
+  on public.family_members (family_id, lower(invited_email))
   where status = 'invited' and invited_email is not null;
 
 -- Browser clients may create only unlinked invited member rows; all linking and activation
