@@ -2,14 +2,35 @@
 async function init() {
     if (typeof SUPABASE_URL === "undefined" || SUPABASE_URL.startsWith("PASTE")) { $("app").append(el("div", "card", "Add your Supabase URL and key in config.js.")); return }
     sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    configureActions({ load, draw, msg, isBusy: () => busy, setBusy: value => { busy = value; } });
     sb.auth.onAuthStateChange((ev, s) => { if (ev === "SIGNED_IN" || ev === "SIGNED_OUT") start() });
     start();
 }
 async function start() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { me = null; login(); return }
-    if (me && me.id === session.user.id && prof) return;
-    me = session.user; await load(); draw();
+    const sameUserAlreadyLoaded = Boolean(me && me.id === session.user.id && prof);
+    me = session.user;
+    // Only accept the exact invitation identifier carried by its email redirect.
+    // Never activate every pending invitation that happens to share this email.
+    const invitationId = new URLSearchParams(window.location.search).get("family_invitation");
+    let acceptedInvitation = false;
+    if (invitationId) {
+        try {
+            const accepted = await sb.functions.invoke("family-invitations", {
+                body: { action: "accept", invitation_id: invitationId }
+            });
+            if (accepted.error) console.warn("Family invitation acceptance failed:", accepted.error.message);
+            else {
+                acceptedInvitation = (accepted.data?.accepted || 0) > 0;
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete("family_invitation");
+                window.history.replaceState({}, "", cleanUrl.toString());
+            }
+        } catch (e) { console.warn("Family invitation acceptance failed:", e); }
+    }
+    if (sameUserAlreadyLoaded) { if (acceptedInvitation) { await load(); draw(); } return; }
+    await load(); draw();
 }
 async function load() {
     const [k, e, p, m] = await Promise.all([sb.from("kids").select("*").order("created_at"), sb.from("entries").select("*").order("created_at", { ascending: false }), sb.from("profiles").select("*"), sb.from("masters").select("*").order("name")]);
@@ -17,26 +38,19 @@ async function load() {
     kids = k.data || []; items = e.data || []; profs = p.data || []; masters = m.data || []; prof = profs.find(x => x.id === me.id) || null;
     if (prof && prof.role === "admin" && !kids.length) { await sb.from("kids").insert({ name: "My child" }); const r = await sb.from("kids").select("*"); kids = r.data || [] }
     // Expense tables are created by the consolidated MyTracker expense SQL migration.
-    const [ex, ca, sc, sf] = await Promise.all([
+    const [ex, ca, sc, sf, batches] = await Promise.all([
         sb.from("expenses").select("*").order("transaction_date", { ascending: false }),
         sb.from("expense_categories").select("*").eq("is_active", true).order("display_order").order("name"),
         sb.from("expense_subcategories").select("*").eq("is_active", true).order("display_order").order("name"),
-        sb.from("saved_expense_filters").select("*").eq("is_active", true).order("is_favorite", { ascending: false }).order("display_order").order("name")
+        sb.from("saved_expense_filters").select("*").eq("is_active", true).order("is_favorite", { ascending: false }).order("display_order").order("name"),
+        sb.from("expense_import_batches").select("*").order("created_at", { ascending: false }).limit(20)
     ]);
     expenses = ex.data || []; expenseCategories = ca.data || []; expenseSubcategories = sc.data || []; savedExpenseFilters = sf.data || [];
+    expenseImportBatches = batches.data || []; expenseBatchLoadError = batches.error ? batches.error.message : "";
     if (ex.error || ca.error || sc.error || sf.error) expenseLoadError = (ex.error || ca.error || sc.error || sf.error).message;
     else expenseLoadError = "";
 }
-async function act(query) {
-    if (busy) return;
-    busy = true; msg("Saving…");
-    try {
-        const { error } = await query;
-        if (error) { msg(error.message); return }
-        await load(); draw(); msg("Saved.");
-    } catch (e) { msg(e.message || String(e)) }
-    finally { busy = false }
-}
+
 function login(mode) {
     mode = mode || "in";
     $("who").textContent = ""; $("side").textContent = ""; $("mb").style.display = "none"; const A = $("app"); A.textContent = "";

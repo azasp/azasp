@@ -42,6 +42,27 @@ function expensesTab(S, F, L, r) {
     const canEdit = ["admin", "parent"].includes(r);
     if (expenseLoadError) { S.append(el("div", "sub", "Expense data could not load: " + expenseLoadError)); S.append(el("div", "sub", "Check that the consolidated expense SQL migration completed successfully and that the signed-in user owns these rows.")); return }
     const all = exActive();
+    if (typeof renderCreditCardReconciliation === "function") renderCreditCardReconciliation(S, canEdit);
+    // SMS import status: batch history and devices contributing transactions.
+    const smsBox = el("div", "card");
+    smsBox.append(el("b", null, "📩 SMS import & devices"));
+    const smsRows = all.filter(x => String(x.source_app || "").toLowerCase().includes("message") || String(x.source_app || "").toLowerCase().includes("sms"));
+    const deviceIds = [...new Set(smsRows.map(x => x.source_device_id).filter(Boolean))];
+    const smsStats = el("div"); smsStats.style.cssText = "display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px";
+    [[ "SMS transactions", smsRows.length ], [ "Devices", deviceIds.length ], [ "Import batches", expenseImportBatches.length ]].forEach(([label, value]) => { const c = el("div", "card"); c.style.margin = "0"; c.append(el("div", "sub", label), el("div", "big", String(value))); smsStats.append(c) });
+    smsBox.append(smsStats);
+    if (expenseBatchLoadError) smsBox.append(el("div", "sub", "Import history unavailable: " + expenseBatchLoadError));
+    if (deviceIds.length) { smsBox.append(el("div", "sub", "Devices seen in imported SMS transactions")); deviceIds.forEach(id => { const n = smsRows.filter(x => x.source_device_id === id).length; smsBox.append(el("div", "item", id + " · " + n + " transactions")) }) }
+    if (expenseImportBatches.length) {
+        smsBox.append(el("div", "sub", "Recent import batches"));
+        expenseImportBatches.slice(0, 10).forEach(batch => {
+            const row = el("div", "item"), left = el("div"), right = el("div");
+            left.append(el("b", null, batch.source || "Import"), el("div", "sub", new Date(batch.created_at).toLocaleString() + (batch.device_id ? " · " + batch.device_id : "")));
+            right.style.textAlign = "right"; right.append(el("b", null, batch.status || "pending"), el("div", "sub", (batch.imported_transactions || 0) + " imported · " + (batch.skipped_messages || 0) + " skipped · " + (batch.failed_messages || 0) + " failed"));
+            row.append(left, right); smsBox.append(row);
+        });
+    } else if (!expenseBatchLoadError) smsBox.append(el("div", "sub", "No SMS import batches yet. Historical SMS import will appear here once the iPhone Shortcut is connected."));
+    S.append(smsBox);
     const totalExp = all.filter(x => x.transaction_type === "expense").reduce((a, x) => a + Number(x.amount), 0);
     const totalInc = all.filter(x => x.transaction_type === "income").reduce((a, x) => a + Number(x.amount), 0);
     const summary = el("div"); summary.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:8px";
@@ -84,6 +105,7 @@ function expensesTab(S, F, L, r) {
     // Filters
     const filterTitle = el("b", null, "Filter and group"); F.append(filterTitle);
     const search = el("input"); search.placeholder = "Search transaction name, merchant, notes"; exRow(F, "Search", search);
+    const source = el("select"); [["", "All sources"], ["ios_messages", "iPhone Messages / SMS"], ["spending_tracker", "Spending Tracker"], ["manual", "Manual / other"]].forEach(([v, label]) => { const o = el("option", null, label); o.value = v; source.append(o) }); exRow(F, "Source", source);
     const type = el("select");[["", "All types"], ["expense", "Expenses"], ["income", "Income"]].forEach(([v, t]) => { const o = el("option", null, t); o.value = v; type.append(o) }); exRow(F, "Type", type);
     const preset = el("select");[["all", "All time"], ["today", "Today"], ["yesterday", "Yesterday"], ["this_week", "This week"], ["this_month", "This month"], ["last_month", "Last month"], ["this_year", "This year"], ["custom", "Custom range"]].forEach(([v, t]) => { const o = el("option", null, t); o.value = v; preset.append(o) }); preset.value = "this_month"; exRow(F, "Date range", preset);
     const from = el("input"), to = el("input"); from.type = to.type = "date"; from.value = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10); to.value = exToday();
@@ -103,7 +125,7 @@ function expensesTab(S, F, L, r) {
     const del = el("button", "link", "Delete selected saved filter"); del.onclick = async () => { const f = savedExpenseFilters.find(x => x.id === saved.value); if (!f || !confirm("Delete saved filter " + f.name + "?")) return; const { error } = await sb.from("saved_expense_filters").delete().eq("id", f.id); if (error) msg(error.message); else { await load(); draw() } };
     const actions = el("div", "row"); actions.append(save, fav, del); F.append(actions);
     const results = el("div"); L.append(results);
-    function exFilterJSON() { return { transaction_type: type.value ? [type.value] : [], search: search.value.trim(), date_preset: preset.value, date_from: from.value || null, date_to: to.value || null, categories: exSelected(cat), subcategories: exSelected(sub), payment_methods: method.value.trim() ? [method.value.trim()] : [], accounts: account.value.trim() ? [account.value.trim()] : [], amount_min: min.value === "" ? null : Number(min.value), amount_max: max.value === "" ? null : Number(max.value) } }
+    function exFilterJSON() { return { transaction_type: type.value ? [type.value] : [], search: search.value.trim(), date_preset: preset.value, date_from: from.value || null, date_to: to.value || null, categories: exSelected(cat), subcategories: exSelected(sub), source: source.value, payment_methods: method.value.trim() ? [method.value.trim()] : [], accounts: account.value.trim() ? [account.value.trim()] : [], amount_min: min.value === "" ? null : Number(min.value), amount_max: max.value === "" ? null : Number(max.value) } }
     function dateBounds() {
         const now = new Date(), today = exToday(), start = new Date(now.getFullYear(), now.getMonth(), 1);
         if (preset.value === "today") return [today, today];
@@ -117,7 +139,7 @@ function expensesTab(S, F, L, r) {
     }
     function renderResults() {
         results.textContent = ""; let rows = exActive(); const q = exFilterJSON(), bounds = dateBounds();
-        rows = rows.filter(x => (!type.value || x.transaction_type === type.value) && (!bounds[0] || x.transaction_date >= bounds[0]) && (!bounds[1] || x.transaction_date <= bounds[1]) && (!q.categories.length || true) && (!q.subcategories.length || true) && (!method.value || String(x.payment_method || "").toLowerCase().includes(method.value.toLowerCase())) && (!account.value || String(x.account || "").toLowerCase().includes(account.value.toLowerCase())) && (min.value === "" || Number(x.amount) >= Number(min.value)) && (max.value === "" || Number(x.amount) <= Number(max.value)) && (!q.search || [exName(x), x.description, x.merchant, x.user_notes, x.notes].join(" ").toLowerCase().includes(q.search.toLowerCase())));
+        rows = rows.filter(x => (!source.value || (source.value === "ios_messages" ? /message|sms/i.test(x.source_app || "") : source.value === "spending_tracker" ? /spending tracker/i.test(x.source_app || "") : !x.source_app || !/message|sms|spending tracker/i.test(x.source_app))) && (!type.value || x.transaction_type === type.value) && (!bounds[0] || x.transaction_date >= bounds[0]) && (!bounds[1] || x.transaction_date <= bounds[1]) && (!q.categories.length || true) && (!q.subcategories.length || true) && (!method.value || String(x.payment_method || "").toLowerCase().includes(method.value.toLowerCase())) && (!account.value || String(x.account || "").toLowerCase().includes(account.value.toLowerCase())) && (min.value === "" || Number(x.amount) >= Number(min.value)) && (max.value === "" || Number(x.amount) <= Number(max.value)) && (!q.search || [exName(x), x.description, x.merchant, x.user_notes, x.notes].join(" ").toLowerCase().includes(q.search.toLowerCase())));
         // Multi-category filters are evaluated from the normalized link tables fetched for the signed-in user.
         rows = rows.filter(x => { const cids = (x._category_ids || []); const sids = (x._subcategory_ids || []); return (!q.categories.length || q.categories.some(id => cids.includes(id))) && (!q.subcategories.length || q.subcategories.some(id => sids.includes(id))) });
         rows.sort((a, b) => { let av = sort.value === "amount" ? Number(a.amount) : sort.value === "name" ? exName(a).toLowerCase() : sort.value === "category" ? String(a.category || "").toLowerCase() : a.transaction_date; let bv = sort.value === "amount" ? Number(b.amount) : sort.value === "name" ? exName(b).toLowerCase() : sort.value === "category" ? String(b.category || "").toLowerCase() : b.transaction_date; return (av > bv ? 1 : av < bv ? -1 : 0) * (direction.value === "asc" ? 1 : -1) });

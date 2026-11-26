@@ -18,7 +18,7 @@ function draw() {
     al.forEach(k => { const b = el("button", k === tab ? "on" : "", TABS[k].n); b.onclick = () => { tab = k; sd.classList.remove("open"); $("ov").classList.remove("show"); draw() }; sd.append(b) });
     if (r !== "child" && kids.length > 1 && tab !== "over" && tab !== "people" && tab !== "masters" && tab !== "profile") { const s = el("select"); kids.forEach(k => { const o = el("option", null, kl(k)); o.value = k.id; s.append(o) }); s.value = kid; s.style.width = "100%"; s.onchange = () => { kid = s.value; draw() }; A.append(s) }
     const S = el("div", "card"), F = el("div", "card"), L = el("div", "card");
-    if (tab === "over") overview(S); else if (tab === "people") people(S, F, L); else if (tab === "masters") masterTab(S); else if (tab === "profile") profileTab(S); else if (tab === "rewards") rewardsTab(S, F, L, r); else if (tab === "expenses") expensesTab(S, F, L, r); else entries(S, F, L, r);
+    if (tab === "over") overview(S); else if (tab === "people") people(S, F, L); else if (tab === "masters") masterTab(S); else if (tab === "profile") profileTab(S); else if (tab === "rewards") rewardsTab(S, F, L, r); else if (tab === "expenses") expensesTab(S, F, L, r); else if (tab === "family") familyDevicesTab(S, F, L); else entries(S, F, L, r);
     [S, F, L].forEach(x => { if (x.childNodes.length) A.append(x) });
 }
 let ovKid = null;
