@@ -2,12 +2,12 @@
 
 ## New migrations
 
-Apply these after the existing PR #5 migrations, in filename order:
+Apply these after the family/device foundation and family RLS migrations, in filename order:
 
-1. `20261126_pr5_pairing_rate_limit.sql`
-2. `20261126_pr5_repayment_state_atomicity.sql`
-3. `20261126_pr5_sms_retry_and_device_enrollment_hardening.sql`
-4. `20261126_pr5_family_invitations.sql`
+1. `20261126_pr5_family_invitations.sql`
+2. `20261126_pr5_pairing_rate_limit.sql`
+3. `20261126_pr5_repayment_state_atomicity.sql`
+4. `20261126_pr5_sms_retry_and_device_enrollment_hardening.sql`
 
 Do not deploy the Edge Functions before applying these migrations. The device enrollment function calls `register_paired_device` and `consume_device_pairing_attempt`; the repayment UI calls `set_credit_card_repayment_status` and `allocate_credit_card_repayment`.
 
