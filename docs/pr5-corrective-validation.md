@@ -44,3 +44,15 @@ Do not deploy the Edge Functions before applying these migrations. The device en
 ## Validation status
 
 No SQL migration has been applied to the live Supabase project in this change, and no Edge Function deployment, authenticated HTTP test, browser test or iPhone test has been performed. Static review only; do not treat the changes as production-verified until the checklist passes.
+
+
+## Automated PR validation
+
+The PR branch now includes `.github/workflows/pr5-validation.yml`, which runs on pull requests to `main` and pushes to this feature branch.
+
+The workflow currently runs:
+- Node.js syntax checks for every application JavaScript file under `assets/js`.
+- Deno type checks for the device-enrollment, family-invitations and SMS-import Edge Function entrypoints.
+- Static migration/security guardrails in `scripts/validate-pr5.mjs` for the invitation uniqueness rule, service-role-only helper, pairing rate limit, atomic device registration, repayment allocation/state rules and SMS retry repair path.
+
+**Scope limitation:** these checks do not execute the SQL migrations against PostgreSQL, exercise RLS with real authenticated roles, send Auth emails, invoke deployed Edge Functions, or run browser/iPhone flows. They are an automated first layer, not a replacement for disposable Supabase integration tests. The repository currently has no committed baseline schema or Supabase CLI project configuration, so a clean local Supabase database cannot yet be initialized from this repository alone.
