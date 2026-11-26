@@ -68,12 +68,23 @@ Deno.serve(async (req) => {
     }
     let invitationRedirect: string;
     try {
-      const redirect = new URL("/", origin);
-      redirect.searchParams.set("family_invitation", member.id);
-      invitationRedirect = redirect.toString();
+      // GitHub Pages hosts this app under /azasp/, not the domain root.
+      // Prefer the actual calling page path (useful for local/custom deployments),
+      // but only trust a Referer whose origin matches the browser Origin.
+      const referer = req.headers.get("Referer");
+      const refererUrl = referer ? new URL(referer) : null;
+      const appBase = refererUrl && refererUrl.origin === new URL(origin).origin
+        ? new URL("./", refererUrl)
+        : new URL(origin).hostname === "azasp.github.io"
+          ? new URL("/azasp/", origin)
+          : new URL("/", origin);
+      appBase.search = "";
+      appBase.hash = "";
+      appBase.searchParams.set("family_invitation", member.id);
+      invitationRedirect = appBase.toString();
     } catch {
       await admin.from("family_members").delete().eq("id", member.id).eq("status", "invited");
-      return json({ error: "Invalid app origin" }, 400);
+      return json({ error: "Invalid app origin or referrer" }, 400);
     }
 
     const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
