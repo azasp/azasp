@@ -43,8 +43,10 @@ Headers:
 
 Body:
 ```json
-{ "action": "status", "device_secret": "DEVICE_SECRET" }
+{ "action": "status" }
 ```
+
+The status endpoint reads the credential only from the Authorization header and verifies that the associated family member is still active.
 
 Proceed only when `status` equals `approved`. Pending, rejected, suspended, revoked, missing or invalid credentials must stop the run.
 
