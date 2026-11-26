@@ -38,4 +38,7 @@ discovery starts from the member's own active family_members row.
 For existing Auth users, the function sends a sign-in OTP email and leaves the
 membership unlinked until the account authenticates. A unique partial database
 index prevents duplicate pending invitations for the same email in one family.
-The same email can be invited independently by different families.
+A service-role-only database helper also rejects an email already linked to an
+active, invited or suspended Auth membership in that family, avoiding a duplicate
+family login at acceptance time. The same email can be invited independently by
+different families.
