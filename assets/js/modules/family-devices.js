@@ -17,7 +17,7 @@ async function familyDevicesTab(S,F,L){
  const [mr,dr,ar,lr]=await Promise.all([
   sb.from("family_members").select("*").eq("family_id",family.id).order("created_at"),
   sb.from("family_devices").select("*").eq("family_id",family.id).order("created_at",{ascending:false}),
-  sb.from("financial_accounts").select("id,account_type,institution,nickname,account_last4,is_active,family_id,family_member_id").eq("user_id",me.id).eq("is_active",true).order("institution"),
+  sb.from("financial_accounts").select("id,user_id,account_type,institution,nickname,account_last4,is_active,family_id,family_member_id").eq("is_active",true).order("institution"),
   sb.from("financial_account_devices").select("*").eq("family_id",family.id).eq("is_active",true)
  ]);
  for(const x of [mr,dr,ar,lr])if(x.error){note(S,x.error.message);return}
@@ -60,7 +60,7 @@ async function familyDevicesTab(S,F,L){
   as.forEach(a=>{const names=ls.filter(x=>x.financial_account_id===a.id).map(x=>devices.find(d=>d.id===x.device_id)?.device_identifier).filter(Boolean);out.append(el("div","item",a.institution+" · "+a.nickname+" · •••• "+a.account_last4+" · "+names.join(", ")))})
  };df.onchange=tf.onchange=paint;paint();
  F.append(el("b",null,"Link an existing account to an approved device"));
- const as=el("select");accounts.forEach(a=>{const o=el("option",null,a.institution+" · "+a.nickname+" · •••• "+a.account_last4);o.value=a.id;as.append(o)});
+ const as=el("select");accounts.filter(a=>a.user_id===me.id).forEach(a=>{const o=el("option",null,a.institution+" · "+a.nickname+" · •••• "+a.account_last4);o.value=a.id;as.append(o)});
  const ds=el("select");devices.filter(d=>d.status==="approved").forEach(d=>{const o=el("option",null,d.device_identifier);o.value=d.id;ds.append(o)});
  const link=el("button","add","Link account");row(F,as,ds,link);link.disabled=!as.options.length||!ds.options.length;
  link.onclick=async()=>{const a=accounts.find(x=>x.id===as.value),d=devices.find(x=>x.id===ds.value);if(!a||!d)return;
