@@ -23,6 +23,7 @@ function parseSms(body: string) {
   const cardCredited = /credited\s+to\s+your\s+credit\s+card|credit\s+card.{0,35}(?:credited|payment\s+received)/i.test(body);
   let event_kind = "unclassified";
   if (cardContext && cardCredited) event_kind = "card_payment_credited";
+  else if (/billdesk/i.test(body) && /\\b(?:debited|paid|sent|upi)\\b/i.test(body)) event_kind = "card_payment_bank_debit";
   else if (cardContext && processor) event_kind = "card_payment_processed";
   else if (amount && /\b(?:debited|spent|purchase|paid|sent|withdrawn)\b/i.test(body)) event_kind = "expense_debit";
   else if (amount && /\b(?:credited|received|deposited|refund)\b/i.test(body)) event_kind = "income_credit";
