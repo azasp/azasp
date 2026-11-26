@@ -41,7 +41,7 @@ async function familyDevicesTab(S,F,L){
  };
  devices.forEach(d=>{
   const m=members.find(x=>x.id===d.family_member_id),box=el("div","item"),left=el("div"),controls=el("div","row");
-  left.append(el("b",null,d.device_identifier),el("div","sub",(m?.display_name||"Member")+" · "+d.device_type+" · "+d.status));
+  left.append(el("b",null,d.device_identifier),el("div","sub",(m?.display_name||"Member")+" · "+d.device_type+" · "+d.status),el("div","sub","Shortcut device ID: "+d.id));
   const audit=async(action,details={})=>sb.from("family_device_audit").insert({family_id:family.id,device_id:d.id,actor_user_id:me.id,action,details});
   const rename=el("button","x","Rename");rename.onclick=async()=>{const v=prompt("Device identifier",d.device_identifier);if(!v?.trim())return;const z=await sb.from("family_devices").update({device_identifier:v.trim()}).eq("id",d.id);if(z.error)return msg(z.error.message);await audit("renamed",{from:d.device_identifier,to:v.trim()});draw()};controls.append(rename);
   if(["pending_approval","rejected","suspended"].includes(d.status)){const b=el("button","add","Approve");b.onclick=async()=>{const z=await sb.from("family_devices").update({status:"approved",approved_by:me.id,approved_at:new Date().toISOString(),revoked_by:null,revoked_at:null}).eq("id",d.id);if(z.error)return msg(z.error.message);await audit("approved");draw()};controls.append(b)}
