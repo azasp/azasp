@@ -50,35 +50,60 @@ Deno.serve(async (req) => {
     if (memberCheckError) return json({ error: "Could not verify family membership" }, 500);
     if (alreadyMember) return json({ error: "This account already belongs to the family" }, 409);
 
+    // Reserve the pending membership before sending email. This closes the race where
+    // an invitee follows the email immediately and accepts before a row exists.
+    const { data: member, error: insertError } = await admin.from("family_members").insert({
+      family_id: familyId, auth_user_id: null, invited_email: email,
+      display_name: displayName, role: "member", status: "invited",
+    }).select("id").single();
+    if (insertError) {
+      if (insertError.code === "23505") return json({ error: "This email already has a pending family invitation" }, 409);
+      return json({ error: "Invitation could not be reserved: " + insertError.message }, 500);
+    }
+
     const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
       data: { family_invitation: true, family_id: familyId, display_name: displayName },
     });
 
     let invitedUserId: string | null = inviteData?.user?.id || null;
-    const createdAuthUser = Boolean(inviteData?.user?.id);
+    const createdAuthUser = Boolean(invitedUserId);
     if (inviteError) {
-      // Existing Auth users cannot receive inviteUserByEmail. Send a sign-in OTP instead;
-      // keep the membership unlinked until that user authenticates with this exact email.
-      if (!/already (registered|exists)|user.*already|email.*exists/i.test(inviteError.message)) {
-        return json({ error: inviteError.message || "Could not send invitation" }, 400);
+      // Supabase reports an existing identity with a stable error code on supported versions.
+      // Keep a narrow message fallback for older Auth responses.
+      const code = String(inviteError.code || "").toLowerCase();
+      const message = String(inviteError.message || "");
+      const existingIdentity = ["email_exists", "user_already_exists", "identity_already_exists"].includes(code)
+        || /already (registered|exists)|user.*already|email.*exists/i.test(message);
+      if (!existingIdentity) {
+        await admin.from("family_members").delete().eq("id", member.id).eq("status", "invited");
+        return json({ error: message || "Could not send invitation" }, 400);
       }
+
+      // Existing Auth identities receive a sign-in OTP; acceptance remains email-bound.
       const { error: otpError } = await admin.auth.signInWithOtp({
         email,
         options: { shouldCreateUser: false },
       });
-      if (otpError) return json({ error: "Could not send sign-in email to the existing account: " + otpError.message }, 400);
+      if (otpError) {
+        await admin.from("family_members").delete().eq("id", member.id).eq("status", "invited");
+        return json({ error: "Could not send sign-in email to the existing account: " + otpError.message }, 400);
+      }
     } else if (!invitedUserId) {
+      await admin.from("family_members").delete().eq("id", member.id).eq("status", "invited");
       return json({ error: "Auth did not return an invited user" }, 400);
     }
 
-    const { data: member, error: insertError } = await admin.from("family_members").insert({
-      family_id: familyId, auth_user_id: invitedUserId, invited_email: email,
-      display_name: displayName, role: "member", status: "invited",
-    }).select("id").single();
-    if (insertError) {
-      // Never delete an existing Auth account. Only roll back the user created by this request.
-      if (createdAuthUser && invitedUserId) await admin.auth.admin.deleteUser(invitedUserId);
-      return json({ error: "Invitation could not be recorded: " + insertError.message }, 500);
+    // Link the newly-created Auth identity after successful delivery. For existing
+    // identities this remains null until the recipient authenticates and accepts.
+    if (invitedUserId) {
+      const { error: linkError } = await admin.from("family_members")
+        .update({ auth_user_id: invitedUserId, updated_at: new Date().toISOString() })
+        .eq("id", member.id);
+      if (linkError) {
+        if (createdAuthUser) await admin.auth.admin.deleteUser(invitedUserId);
+        await admin.from("family_members").delete().eq("id", member.id).eq("status", "invited");
+        return json({ error: "Invitation could not be linked: " + linkError.message }, 500);
+      }
     }
     return json({
       success: true, member_id: member.id,
