@@ -71,3 +71,9 @@ settlement_confirmed_at=case when (
     where a.bill_id=b.id and r.status<>'credited'
   )
 ) then coalesce(b.settlement_confirmed_at,now()) else null end;
+
+-- Prevent clients from bypassing the authoritative RPCs with direct Data API writes.
+revoke update on public.credit_card_repayments from authenticated;
+revoke insert,update,delete on public.credit_card_payment_allocations from authenticated;
+revoke update on public.credit_card_bills from authenticated;
+grant select on public.credit_card_repayments, public.credit_card_payment_allocations, public.credit_card_bills to authenticated;
