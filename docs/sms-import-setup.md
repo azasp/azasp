@@ -4,11 +4,11 @@
 
 `POST https://flkbctstpgsllyvunihm.supabase.co/functions/v1/sms-import`
 
-The function requires a valid Supabase user access token. Keep the token private; do not put it in a shared Shortcut or publish it.
+The function accepts either a valid Supabase user access token or a scoped per-device credential issued by `device-enrollment`. For iPhone Shortcuts, use the device credential. Never use a Supabase service-role key.
 
 Headers:
 
-- `Authorization: Bearer <current Supabase access token>`
+- `Authorization: Bearer <device_secret>` (iPhone Shortcut) or `<current Supabase access token>` (authenticated app)
 - `apikey: <Supabase publishable/anon key>`
 - `Content-Type: application/json`
 
@@ -45,3 +45,8 @@ This endpoint does not grant an app permission to read the iPhone's entire Messa
 ## Important current scope
 
 The importer records BillDesk/card-credit events but does not automatically pair every processor message with its bank debit. Review the SMS events and confirm the processor and issuer-credit stages in the repayment screen. Never mark a card credited based only on a BillDesk processing confirmation.
+
+
+## iPhone first-run enrollment
+
+See [iPhone SMS automation](./iphone-sms-automation.md). The family administrator creates a one-time pairing code from **Family & devices**. The Shortcut exchanges it with `POST /device-enrollment`, receives a device UUID and scoped device secret, and the device remains pending approval. The Shortcut must call the enrollment status action before each import and stop unless the device is approved. Device secrets can be revoked by changing the device status in MyTracker.
