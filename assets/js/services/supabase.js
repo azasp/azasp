@@ -9,13 +9,15 @@ async function init() {
 async function start() {
     const { data: { session } } = await sb.auth.getSession();
     if (!session) { me = null; login(); return }
-    if (me && me.id === session.user.id && prof) return;
+    const sameUserAlreadyLoaded = Boolean(me && me.id === session.user.id && prof);
     me = session.user;
-    // Activate an email-bound invitation only after the invitee authenticates.
+    // Check acceptance even for an already-loaded session: an existing user may
+    // authenticate an invitation OTP in the same browser without changing user ID.
     try {
         const accepted = await sb.functions.invoke("family-invitations", { body: { action: "accept" } });
         if (accepted.error) console.warn("Family invitation acceptance check failed:", accepted.error.message);
     } catch (e) { console.warn("Family invitation acceptance check failed:", e); }
+    if (sameUserAlreadyLoaded) return;
     await load(); draw();
 }
 async function load() {
