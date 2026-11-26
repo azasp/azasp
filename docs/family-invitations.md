@@ -29,10 +29,13 @@ discovery starts from the member's own active family_members row.
 2. Deploy supabase/functions/family-invitations/index.ts as the family-invitations
    Supabase Edge Function.
 3. Configure Supabase Auth email templates, SMTP, and allowed redirect URLs for MyTracker.
-4. Test with a separate email account: pending invitation, no family access before
-   acceptance, acceptance after sign-in, active access after acceptance, and rejection
-   of an email-mismatch attempt.
+4. Test both a new Auth email and an already-registered Auth email: pending invitation,
+   no family access before acceptance, acceptance after sign-in, active access after
+   acceptance, and rejection of an email-mismatch attempt.
+5. Test concurrent duplicate invites for one family/email; only one pending membership
+   should be created. Also test that a different family can invite the same email.
 
-This initial implementation uses Supabase Auth inviteUserByEmail. An address already
-registered with Auth may be rejected by Supabase and requires a separate account-linking
-flow; the function fails closed rather than granting access.
+For existing Auth users, the function sends a sign-in OTP email and leaves the
+membership unlinked until the account authenticates. A unique partial database
+index prevents duplicate pending invitations for the same email in one family.
+The same email can be invited independently by different families.
