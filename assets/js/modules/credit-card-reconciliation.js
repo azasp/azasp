@@ -78,42 +78,21 @@ async function drawCreditCardBills(list, canEdit) {
     if (!bills?.length) { list.textContent = "No credit-card bills added yet."; return }
     for (const bill of bills) {
         const row = el("div", "card");
-        const delta = bill.payment_amount == null ? null : Math.abs(Number(bill.statement_amount) - Number(bill.payment_amount));
-        const within = delta != null && delta <= 1;
         row.append(el("b", null, bill.issuer + " · card •••• " + bill.card_last4));
         row.append(el("div", "sub", "Bill " + exMoney(bill.statement_amount) + " · due " + bill.due_date));
-        if (delta != null) {
-            row.append(el("div", "sub", "Payment " + exMoney(bill.payment_amount) + (bill.payment_date ? " · " + bill.payment_date : "")));
-            row.append(el("div", "sub", "Difference: " + exMoney(delta)));
-            const status = el("div", "sub", within ? "✓ Matched — within ₹1 tolerance" : "⚠ Discrepancy — difference exceeds ₹1");
-            status.style.fontWeight = "700"; status.style.color = within ? "var(--pos, #16803c)" : "var(--neg, #c62828)"; row.append(status);
-            if (bill.payment_reference) row.append(el("div", "sub", "Bank reference: " + bill.payment_reference));
-        } else row.append(el("div", "sub", "No payment linked yet."));
-        if (bill.settlement_confirmed) row.append(el("div", "sub", "✓ Settlement manually confirmed"));
-        if (canEdit && !bill.settlement_confirmed) {
-            const candidates = expenses.filter(x => !x.is_deleted && x.transaction_type === "expense" && x.transaction_date <= bill.due_date && Math.abs(new Date(bill.due_date) - new Date(x.transaction_date)) <= 14 * 86400000 && /upi|bank|transfer/i.test([x.payment_method, x.description, x.merchant, x.account].join(" ")));
-            const select = el("select"); const empty = el("option", null, "Select bank payment transaction…"); empty.value = ""; select.append(empty);
-            candidates.forEach(x => { const o = el("option", null, (x.transaction_date || "") + " · " + exMoney(x.amount) + " · " + (x.description || x.merchant || x.account || "Bank payment")); o.value = x.id; select.append(o) });
-            const link = el("button", "x", "Match payment"); link.disabled = !candidates.length;
-            link.onclick = async () => {
-                const payment = candidates.find(x => x.id === select.value); if (!payment) { msg("Select a bank payment first."); return }
-                const reference = payment.external_id || payment.source_message_hash || "";
-                const { error: saveError } = await sb.from("credit_card_bills").update({ payment_expense_id: payment.id, payment_amount: Number(payment.amount), payment_date: payment.transaction_date, payment_reference: reference || null }).eq("id", bill.id);
-                if (saveError) { msg("Could not match payment: " + saveError.message); return }
-                await drawCreditCardBills(list, canEdit);
-            };
-            const controls = el("div", "row"); controls.append(select, link); row.append(controls);
-            if (bill.payment_expense_id) {
-                const confirm = el("button", "add", "Confirm card issuer received payment");
-                confirm.onclick = async () => {
-                    const warning = within ? "" : " The amount differs from the statement by more than ₹1; confirm only after checking the discrepancy.";
-                    if (!window.confirm("Confirm that the card issuer has credited this payment?" + warning)) return;
-                    const { error: confirmError } = await sb.from("credit_card_bills").update({ settlement_confirmed: true, settlement_confirmed_at: new Date().toISOString() }).eq("id", bill.id);
-                    if (confirmError) { msg("Could not confirm settlement: " + confirmError.message); return }
-                    await drawCreditCardBills(list, canEdit);
-                };
-                row.append(confirm);
-            }
+        const allocations = await sb.from("credit_card_payment_allocations")
+            .select("allocated_amount,repayment_id").eq("bill_id", bill.id);
+        if (allocations.error) {
+            row.append(el("div", "sub", "Allocation status unavailable: " + allocations.error.message));
+        } else {
+            const allocated = (allocations.data || []).reduce((sum, x) => sum + Number(x.allocated_amount), 0);
+            row.append(el("div", "sub", "Allocated " + exMoney(allocated) + " of " + exMoney(bill.statement_amount)));
+        }
+        if (bill.settlement_confirmed) row.append(el("div", "sub", "✓ Settled — fully allocated and issuer-credited"));
+        else row.append(el("div", "sub", "Outstanding — settlement is controlled by the repayment lifecycle"));
+        if (canEdit) {
+            const note = el("div", "sub", "Link bank debits, confirm processor processing, confirm issuer credit, then allocate repayments in the lifecycle panel above.");
+            row.append(note);
         }
         list.append(row);
     }
@@ -170,12 +149,12 @@ async function renderRepaymentLifecycle(host) {
         left.append(el("b",null,accountLabel(p.card_account_id)+" · "+exMoney(p.amount)),el("div","sub",(p.payment_date||"")+" · "+(p.processor||"Processor not set")+" · "+(p.payment_reference||"No reference")+" · "+p.status));
         if(p.status==="bank_debited"){
             const b=el("button","add","Confirm processor processed");
-            b.onclick=async()=>{if(!confirm("Confirm that the processor accepted/processed this payment (for example, BillDesk confirmation)?"))return;const z=await sb.from("credit_card_repayments").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",p.id);if(z.error)return msg(z.error.message);msg("Processor stage recorded; card credit is still pending.");host.replaceChildren();renderRepaymentLifecycle(host)};
+            b.onclick=async()=>{if(!confirm("Confirm that the processor accepted/processed this payment (for example, BillDesk confirmation)?"))return;const z=await sb.rpc("set_credit_card_repayment_status",{p_repayment_id:p.id,p_next_status:"processed"});if(z.error)return msg(z.error.message);msg("Processor stage recorded; card credit is still pending.");host.replaceChildren();renderRepaymentLifecycle(host)};
             controls.append(b);
         }
         if(p.status==="processed"){
             const b=el("button","add","Confirm card issuer credited");
-            b.onclick=async()=>{if(!confirm("Confirm only after an issuer credit SMS or your direct verification that the card account was credited."))return;const z=await sb.from("credit_card_repayments").update({status:"credited",credited_at:new Date().toISOString()}).eq("id",p.id);if(z.error)return msg(z.error.message);msg("Issuer credit confirmed.");host.replaceChildren();renderRepaymentLifecycle(host)};
+            b.onclick=async()=>{if(!confirm("Confirm only after an issuer credit SMS or your direct verification that the card account was credited."))return;const z=await sb.rpc("set_credit_card_repayment_status",{p_repayment_id:p.id,p_next_status:"credited"});if(z.error)return msg(z.error.message);msg("Issuer credit confirmed.");host.replaceChildren();renderRepaymentLifecycle(host)};
             controls.append(b);
         }
         box.append(left,controls);
@@ -200,20 +179,10 @@ async function renderRepaymentLifecycle(host) {
                     const chosen=eligible.find(x=>x.bill.id===billSelect.value),v=Number(allocation.value);
                     if(!chosen||!(v>0)){msg("Select a bill and enter an allocation.");return}
                     if(v>Number(p.amount)-allocated+0.001||v>chosen.remaining+0.001){msg("Allocation exceeds the remaining repayment or bill amount.");return}
-                    const existing=(alloc.data||[]).find(x=>x.bill_id===chosen.bill.id);
-                    const z=existing
-                      ? await sb.from("credit_card_payment_allocations").update({allocated_amount:Number(existing.allocated_amount)+v}).eq("id",existing.id)
-                      : await sb.from("credit_card_payment_allocations").insert({user_id:me.id,repayment_id:p.id,bill_id:chosen.bill.id,allocated_amount:v});
+                    const z=await sb.rpc("allocate_credit_card_repayment",{
+                        p_repayment_id:p.id,p_bill_id:chosen.bill.id,p_amount:v
+                    });
                     if(z.error)return msg(z.error.message);
-                    const allAlloc=await sb.from("credit_card_payment_allocations").select("allocated_amount,repayment_id").eq("bill_id",chosen.bill.id);
-                    if(!allAlloc.error){
-                        const paid=allAlloc.data.reduce((s,x)=>s+Number(x.allocated_amount),0);
-                        const ids=[...new Set(allAlloc.data.map(x=>x.repayment_id))];
-                        const stages=ids.length?await sb.from("credit_card_repayments").select("id,status").in("id",ids):{data:[]};
-                        if(paid+0.001>=Number(chosen.bill.statement_amount)&&!stages.error&&(stages.data||[]).every(x=>x.status==="credited")){
-                            await sb.from("credit_card_bills").update({settlement_confirmed:true,settlement_confirmed_at:new Date().toISOString()}).eq("id",chosen.bill.id);
-                        }
-                    }
                     msg("Bill allocation saved.");host.replaceChildren();renderRepaymentLifecycle(host);
                 };
                 const r=el("div","row");r.append(billSelect,allocation,save);box.append(r);
