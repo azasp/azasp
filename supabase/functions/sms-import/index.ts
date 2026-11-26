@@ -136,6 +136,16 @@ Deno.serve(async (req: Request) => {
   if (expenseRows.length) {
     // Upsert is idempotent. Read back by unique source key so a prior successful insert
     // followed by a failed event-link update is also repaired on retry.
+    // Snapshot existing source keys before the idempotent upsert so this batch's
+    // imported count reflects newly-created expenses, not old rows found on retry.
+    const sourceHashes = expenseRows.map(x => x.source_message_hash);
+    const before = await db.from("expenses").select("source_message_hash")
+      .eq("source_family_device_id", device.id).in("source_message_hash", sourceHashes);
+    if (before.error) {
+      await db.from("expense_import_batches").update({ status: "partial", failed_messages: expenseRows.length, completed_at: new Date().toISOString() }).eq("id", batchId);
+      return json(500, { error: "Could not inspect existing imported transactions", detail: before.error.message, batch_id: batchId });
+    }
+    const existingHashes = new Set((before.data || []).map(x => x.source_message_hash));
     const saved = await db.from("expenses").upsert(expenseRows, {
       onConflict: "source_family_device_id,source_message_hash", ignoreDuplicates: true
     });
@@ -161,7 +171,7 @@ Deno.serve(async (req: Request) => {
         }
       }
     }
-    imported = materialized.data?.length || 0;
+    imported = (materialized.data || []).filter(x => !existingHashes.has(x.source_message_hash)).length;
   }
   const skipped = normalized.length - transactions.length;
   await db.from("expense_import_batches").update({
