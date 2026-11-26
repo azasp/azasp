@@ -11,15 +11,25 @@ async function start() {
     if (!session) { me = null; login(); return }
     const sameUserAlreadyLoaded = Boolean(me && me.id === session.user.id && prof);
     me = session.user;
-    // Check acceptance even for an already-loaded session: an existing user may
-    // authenticate an invitation OTP in the same browser without changing user ID.
+    // Only accept the exact invitation identifier carried by its email redirect.
+    // Never activate every pending invitation that happens to share this email.
+    const invitationId = new URLSearchParams(window.location.search).get("family_invitation");
     let acceptedInvitation = false;
-    try {
-        const accepted = await sb.functions.invoke("family-invitations", { body: { action: "accept" } });
-        if (accepted.error) console.warn("Family invitation acceptance check failed:", accepted.error.message);
-        else acceptedInvitation = (accepted.data?.accepted || 0) > 0;
-    } catch (e) { console.warn("Family invitation acceptance check failed:", e); }
-    if (sameUserAlreadyLoaded) { if (acceptedInvitation) draw(); return; }
+    if (invitationId) {
+        try {
+            const accepted = await sb.functions.invoke("family-invitations", {
+                body: { action: "accept", invitation_id: invitationId }
+            });
+            if (accepted.error) console.warn("Family invitation acceptance failed:", accepted.error.message);
+            else {
+                acceptedInvitation = (accepted.data?.accepted || 0) > 0;
+                const cleanUrl = new URL(window.location.href);
+                cleanUrl.searchParams.delete("family_invitation");
+                window.history.replaceState({}, "", cleanUrl.toString());
+            }
+        } catch (e) { console.warn("Family invitation acceptance failed:", e); }
+    }
+    if (sameUserAlreadyLoaded) { if (acceptedInvitation) { await load(); draw(); } return; }
     await load(); draw();
 }
 async function load() {
