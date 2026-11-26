@@ -39,9 +39,16 @@ Deno.serve(async (req) => {
     if (familyError || !family || family.owner_user_id !== userData.user.id)
       return json({ error: "Only the family owner can invite members" }, 403);
 
-    const { data: existing } = await admin.from("family_members").select("id")
-      .eq("family_id", familyId).eq("invited_email", email).limit(1).maybeSingle();
-    if (existing) return json({ error: "This email already has a family invitation" }, 409);
+    const { data: existingInvite, error: existingInviteError } = await admin.from("family_members").select("id")
+      .eq("family_id", familyId).eq("status", "invited").eq("invited_email", email).limit(1).maybeSingle();
+    if (existingInviteError) return json({ error: "Could not verify existing invitations" }, 500);
+    if (existingInvite) return json({ error: "This email already has a pending family invitation" }, 409);
+
+    const { data: alreadyMember, error: memberCheckError } = await admin.rpc("family_has_auth_member_email", {
+      p_family_id: familyId, p_email: email,
+    });
+    if (memberCheckError) return json({ error: "Could not verify family membership" }, 500);
+    if (alreadyMember) return json({ error: "This account already belongs to the family" }, 409);
 
     const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
       data: { family_invitation: true, family_id: familyId, display_name: displayName },
