@@ -1,15 +1,26 @@
 # Family invitations
 
 The family owner invites a member by name and email from Family & devices. The
-family-invitations Edge Function verifies the caller is the owner, sends a Supabase
-Auth invitation, and creates a family_members row with status invited. An invited
-member is not active and must not be granted family-data access.
+family-invitations Edge Function verifies the caller is the owner and creates a
+family_members row with status invited. New Auth users receive a Supabase Auth
+invitation. If Supabase reports that the email already belongs to an Auth user,
+the function sends that existing account a sign-in OTP instead and leaves
+auth_user_id unlinked until acceptance. An invited member is not active and must
+not be granted family-data access.
 
-When the invitee opens the Auth invitation, completes sign-in, and the app starts,
-the app calls the same function with action accept. The function verifies that the
-authenticated user's email matches the stored invitation email before changing the
-membership status to active. The service-role key is used only inside the Edge
-Function and must never be exposed to the browser.
+When the invitee follows the Auth invitation or existing-user sign-in email,
+authenticates, and the app starts, the app calls the same function with action
+accept. The function compares the authenticated account's email with the stored
+invitation email, then links the account and activates the membership. It updates
+each invitation conditionally so a concurrent acceptance cannot link it to a
+different user. The service-role key is used only inside the Edge Function and
+must never be exposed to the browser.
+
+Accepted non-owner members see a read-only Family & devices view containing only
+their own registered devices and accounts assigned to their family_members row.
+They do not get owner controls for inviting members, approving devices, or
+reassigning accounts. The families table remains owner-readable only; member
+discovery starts from the member's own active family_members row.
 
 ## Deployment
 
