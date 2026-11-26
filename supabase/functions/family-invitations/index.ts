@@ -61,8 +61,24 @@ Deno.serve(async (req) => {
       return json({ error: "Invitation could not be reserved: " + insertError.message }, 500);
     }
 
+    const origin = req.headers.get("Origin");
+    if (!origin) {
+      await admin.from("family_members").delete().eq("id", member.id).eq("status", "invited");
+      return json({ error: "App origin is required to deliver a family invitation" }, 400);
+    }
+    let invitationRedirect: string;
+    try {
+      const redirect = new URL("/", origin);
+      redirect.searchParams.set("family_invitation", member.id);
+      invitationRedirect = redirect.toString();
+    } catch {
+      await admin.from("family_members").delete().eq("id", member.id).eq("status", "invited");
+      return json({ error: "Invalid app origin" }, 400);
+    }
+
     const { data: inviteData, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
-      data: { family_invitation: true, family_id: familyId, display_name: displayName },
+      data: { family_invitation: true, family_id: familyId, family_invitation_id: member.id, display_name: displayName },
+      redirectTo: invitationRedirect,
     });
 
     let invitedUserId: string | null = inviteData?.user?.id || null;
@@ -82,7 +98,7 @@ Deno.serve(async (req) => {
       // Existing Auth identities receive a sign-in OTP; acceptance remains email-bound.
       const { error: otpError } = await admin.auth.signInWithOtp({
         email,
-        options: { shouldCreateUser: false },
+        options: { shouldCreateUser: false, emailRedirectTo: invitationRedirect },
       });
       if (otpError) {
         await admin.from("family_members").delete().eq("id", member.id).eq("status", "invited");
@@ -112,24 +128,28 @@ Deno.serve(async (req) => {
   }
 
   if (body.action === "accept") {
+    const invitationId = String(body.invitation_id || "").trim();
+    if (!invitationId) return json({ error: "The specific family invitation is required" }, 400);
+
     const email = userData.user.email.toLowerCase();
-    const { data: pending, error: pendingError } = await admin.from("family_members")
-      .select("id,auth_user_id,invited_email").eq("status", "invited").eq("invited_email", email);
-    if (pendingError) return json({ error: pendingError.message }, 500);
-    const matches = (pending || []).filter((m) => !m.auth_user_id || m.auth_user_id === userData.user.id);
-    let acceptedCount = 0;
-    for (const invitation of matches) {
-      let update = admin.from("family_members")
-        .update({ auth_user_id: userData.user.id, status: "active", updated_at: new Date().toISOString() })
-        .eq("id", invitation.id).eq("status", "invited");
-      update = invitation.auth_user_id
-        ? update.eq("auth_user_id", userData.user.id)
-        : update.is("auth_user_id", null);
-      const { data: changed, error: updateError } = await update.select("id");
-      if (updateError) return json({ error: updateError.message }, 500);
-      acceptedCount += changed?.length || 0;
-    }
-    return json({ success: true, accepted: acceptedCount });
+    const { data: invitation, error: invitationError } = await admin.from("family_members")
+      .select("id,auth_user_id,invited_email,status")
+      .eq("id", invitationId).eq("status", "invited").maybeSingle();
+    if (invitationError) return json({ error: invitationError.message }, 500);
+    if (!invitation || String(invitation.invited_email || "").toLowerCase() !== email)
+      return json({ error: "This invitation does not belong to the authenticated email account" }, 403);
+    if (invitation.auth_user_id && invitation.auth_user_id !== userData.user.id)
+      return json({ error: "This invitation is already linked to another account" }, 409);
+
+    let update = admin.from("family_members")
+      .update({ auth_user_id: userData.user.id, status: "active", updated_at: new Date().toISOString() })
+      .eq("id", invitation.id).eq("status", "invited");
+    update = invitation.auth_user_id
+      ? update.eq("auth_user_id", userData.user.id)
+      : update.is("auth_user_id", null);
+    const { data: changed, error: updateError } = await update.select("id");
+    if (updateError) return json({ error: updateError.message }, 500);
+    return json({ success: true, accepted: changed?.length || 0 });
   }
   return json({ error: "Unsupported action" }, 400);
 });
