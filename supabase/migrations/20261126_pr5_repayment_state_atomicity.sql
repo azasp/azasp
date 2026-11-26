@@ -20,10 +20,10 @@ begin
    where id=r.id;
 
   for bill in
-    select distinct b.id,b.statement_amount
+    select b.id,b.statement_amount
       from public.credit_card_bills b
-      join public.credit_card_payment_allocations a on a.bill_id=b.id
-     where a.repayment_id=r.id and b.user_id=auth.uid()
+     where b.user_id=auth.uid()
+       and exists (select 1 from public.credit_card_payment_allocations a where a.bill_id=b.id and a.repayment_id=r.id)
      for update of b
   loop
     update public.credit_card_bills b
