@@ -89,6 +89,17 @@ async function refreshResourceMetrics(force) {
     }
 }
 
+let resourceMetricsPollingStarted = false;
+function startResourceMetricsPolling() {
+    if (resourceMetricsPollingStarted) return;
+    resourceMetricsPollingStarted = true;
+    window.setInterval(async () => {
+        if (role() !== "admin" || document.visibilityState === "hidden" || busy) return;
+        const refreshed = await refreshResourceMetrics(true);
+        if (refreshed && role() === "admin" && !busy) draw();
+    }, RESOURCE_METRICS_TTL_MS);
+}
+
 async function resourcesTab(S, F, L) {
     S.append(el("b", null, "🖥️ Supabase resource monitor"));
     S.append(el("div", "sub", "Live PostgreSQL measurements and host telemetry. Database storage is compared with the configured 500 MB Free-tier quota."));
