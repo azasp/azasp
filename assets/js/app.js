@@ -6,20 +6,69 @@ function stats(k) {
 }
 function draw() {
     if (busy) return;
-    const A = $("app"); A.textContent = ""; $("side").textContent = ""; const r = role(), al = ALLOW[r];
-    const top = el("div"); const pn = el("button", "link", "👤 " + (prof ? prof.name : "You")); pn.style.cssText = "font-size:14px;color:var(--tx)"; pn.onclick = () => { tab = "profile"; draw() };
-    const so = el("button", "link", "Sign out"); so.onclick = async () => { prof = null; await sb.auth.signOut() };
-    top.append(pn, document.createTextNode(" · " + (r === "admin" ? "Admin" : ROLES[r]) + " · "), so);
-    $("who").textContent = ""; $("who").append(top);
-    if (!al.length) { A.append(el("div", "card", "Your account is waiting for approval. Ask the admin to give you a role, then reload.")); return }
-    if (r === "child" && prof.kid_id) kid = prof.kid_id; else if (!kids.find(k => k.id === kid)) kid = kids[0] && kids[0].id;
+    const A = $("app"); A.textContent = ""; $("side").textContent = "";
+    const r = role(), al = ALLOW[r], sd = $("side");
+    $("who").textContent = "";
+    if (!al.length) {
+        A.append(el("div", "card", "Your account is waiting for approval. Ask the admin to give you a role, then reload."));
+        return;
+    }
+
+    if (r === "child" && prof.kid_id) kid = prof.kid_id;
+    else if (!kids.find(k => k.id === kid)) kid = kids[0] && kids[0].id;
     if (!al.includes(tab)) tab = al[0];
-    const sd = $("side"); $("mb").style.display = "";
-    al.forEach(k => { const b = el("button", k === tab ? "on" : "", TABS[k].n); b.onclick = () => { tab = k; sd.classList.remove("open"); $("ov").classList.remove("show"); draw() }; sd.append(b) });
-    if (r !== "child" && kids.length > 1 && tab !== "over" && tab !== "people" && tab !== "masters" && tab !== "profile") { const s = el("select"); kids.forEach(k => { const o = el("option", null, kl(k)); o.value = k.id; s.append(o) }); s.value = kid; s.style.width = "100%"; s.onchange = () => { kid = s.value; draw() }; A.append(s) }
+    $("mb").style.display = "";
+
+    // Account identity and sign-out live in the navigation drawer on every screen.
+    const account = el("div", "side-account");
+    const accountName = el("div", "side-account-name", prof?.name || me?.user_metadata?.name || "My account");
+    const accountEmail = el("div", "side-account-email", shown(me?.email || ""));
+    const accountRole = el("div", "side-account-role", r === "admin" ? "Administrator" : (ROLES[r] || r));
+    const accountActions = el("div", "side-account-actions");
+    const profileButton = el("button", "side-account-link", "👤 Profile");
+    profileButton.onclick = () => { tab = "profile"; sd.classList.remove("open"); $("ov").classList.remove("show"); draw(); };
+    const signOutButton = el("button", "side-account-link sign-out", "↪ Sign out");
+    signOutButton.onclick = async () => {
+        signOutButton.disabled = true;
+        const { error } = await sb.auth.signOut();
+        if (error) { signOutButton.disabled = false; msg("Could not sign out: " + error.message); }
+    };
+    accountActions.append(profileButton, signOutButton);
+    account.append(accountName, accountEmail, accountRole, accountActions);
+    sd.append(account);
+
+    // The selected person only applies to child-owned tracker areas.
+    const kidScopedTabs = ["money", "stars", "shop", "classes", "health", "rewards"];
+    if (r !== "child" && kids.length > 1 && kidScopedTabs.includes(tab)) {
+        const picker = el("div", "side-kid-picker");
+        picker.append(el("label", "side-kid-label", "Viewing"));
+        const select = el("select", "side-kid-select");
+        kids.forEach(k => { const option = el("option", null, kl(k)); option.value = k.id; select.append(option); });
+        select.value = kid || "";
+        select.onchange = () => { kid = select.value; draw(); };
+        picker.append(select);
+        sd.append(picker);
+    }
+
+    const divider = el("div", "side-divider");
+    sd.append(divider);
+    al.forEach(k => {
+        const b = el("button", k === tab ? "on" : "", TABS[k].n);
+        b.onclick = () => { tab = k; sd.classList.remove("open"); $("ov").classList.remove("show"); draw(); };
+        sd.append(b);
+    });
+
     const S = el("div", "card"), F = el("div", "card"), L = el("div", "card");
-    if (tab === "over") overview(S); else if (tab === "people") people(S, F, L); else if (tab === "masters") masterTab(S); else if (tab === "profile") profileTab(S); else if (tab === "rewards") rewardsTab(S, F, L, r); else if (tab === "expenses") expensesTab(S, F, L, r); else if (tab === "family") familyDevicesTab(S, F, L); else if (tab === "resources") resourcesTab(S, F, L); else entries(S, F, L, r);
-    [S, F, L].forEach(x => { if (x.childNodes.length) A.append(x) });
+    if (tab === "over") overview(S);
+    else if (tab === "people") people(S, F, L);
+    else if (tab === "masters") masterTab(S);
+    else if (tab === "profile") profileTab(S);
+    else if (tab === "rewards") rewardsTab(S, F, L, r);
+    else if (tab === "expenses") expensesTab(S, F, L, r);
+    else if (tab === "family") familyDevicesTab(S, F, L);
+    else if (tab === "resources") resourcesTab(S, F, L);
+    else entries(S, F, L, r);
+    [S, F, L].forEach(x => { if (x.childNodes.length) A.append(x); });
 }
 let ovKid = null;
 function overview(S) {
