@@ -52,7 +52,7 @@ function draw() {
     // Show the live database quota status across all admin pages.
     if (r === "admin") {
         renderGlobalResourceNotice(A);
-        if (!resourceMetricsCache || Date.now() - resourceMetricsCacheAt >= RESOURCE_METRICS_TTL_MS) {
+        if (!resourceMetricsLoading && (!resourceMetricsCache || Date.now() - resourceMetricsCacheAt >= RESOURCE_METRICS_TTL_MS)) {
             refreshResourceMetrics(false).then(() => {
                 if (role() === "admin" && !busy) draw();
             });
