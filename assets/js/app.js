@@ -51,6 +51,7 @@ function draw() {
 
     // Show the live database quota status across all admin pages.
     if (r === "admin") {
+        startResourceMetricsPolling();
         renderGlobalResourceNotice(A);
         if (!resourceMetricsLoading && Date.now() - resourceMetricsCacheAt >= RESOURCE_METRICS_TTL_MS) {
             refreshResourceMetrics(false).then(() => {
