@@ -3,6 +3,7 @@ const RESOURCE_QUOTA_BYTES = 500 * 1024 * 1024;
 let resourceMetricsCache = null;
 let resourceMetricsCacheAt = 0;
 let resourceMetricsLoading = false;
+let resourceMetricsError = null;
 const RESOURCE_METRICS_TTL_MS = 5 * 60 * 1000;
 
 function resourceBytes(value) {
@@ -49,7 +50,9 @@ function renderGlobalResourceNotice(host) {
     const databaseMetrics = resourceMetricsCache?.database_metrics;
     if (databaseMetrics?.database_size_bytes == null) {
         wrap.classList.add("loading");
-        wrap.textContent = "Checking live database storage against the 500 MB free-tier quota…";
+        wrap.textContent = resourceMetricsError
+            ? "Database quota status could not be refreshed. Open Resources and retry."
+            : "Checking live database storage against the 500 MB free-tier quota…";
     } else {
         const state = resourceUsageState(databaseMetrics);
         wrap.classList.add(state.level);
@@ -63,7 +66,7 @@ function renderGlobalResourceNotice(host) {
 
 async function refreshResourceMetrics(force) {
     if (role() !== "admin") return null;
-    if (!force && resourceMetricsCache && Date.now() - resourceMetricsCacheAt < RESOURCE_METRICS_TTL_MS) return resourceMetricsCache;
+    if (!force && Date.now() - resourceMetricsCacheAt < RESOURCE_METRICS_TTL_MS) return resourceMetricsCache;
     if (resourceMetricsLoading) return null;
     resourceMetricsLoading = true;
     try {
@@ -72,9 +75,13 @@ async function refreshResourceMetrics(force) {
         if (!data?.database_metrics) throw new Error(data?.error || "Resource metrics response was incomplete.");
         resourceMetricsCache = data;
         resourceMetricsCacheAt = Date.now();
+        resourceMetricsError = null;
         return data;
     } catch (error) {
         console.warn("MyTracker resource metrics unavailable:", error?.message || error);
+        // Back off after failures so a temporarily unavailable function cannot cause a render loop.
+        resourceMetricsCacheAt = Date.now();
+        resourceMetricsError = error?.message || "Resource metrics unavailable";
         // Keep the previous known-good snapshot visible if a refresh fails.
         return resourceMetricsCache;
     } finally {
