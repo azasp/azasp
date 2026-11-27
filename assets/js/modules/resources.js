@@ -46,11 +46,12 @@ function resourceUsageState(data) {
 function renderGlobalResourceNotice(host) {
     if (role() !== "admin") return;
     const wrap = el("div", "resource-global-notice");
-    if (!resourceMetricsCache?.database_size_bytes && resourceMetricsCache?.database_size_bytes !== 0) {
+    const databaseMetrics = resourceMetricsCache?.database_metrics;
+    if (databaseMetrics?.database_size_bytes == null) {
         wrap.classList.add("loading");
         wrap.textContent = "Checking live database storage against the 500 MB free-tier quota…";
     } else {
-        const state = resourceUsageState(resourceMetricsCache);
+        const state = resourceUsageState(databaseMetrics);
         wrap.classList.add(state.level);
         wrap.append(el("span", null, state.message));
         const details = el("span", "resource-global-detail",
