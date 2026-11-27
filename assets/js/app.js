@@ -6,20 +6,93 @@ function stats(k) {
 }
 function draw() {
     if (busy) return;
-    const A = $("app"); A.textContent = ""; $("side").textContent = ""; const r = role(), al = ALLOW[r];
-    const top = el("div"); const pn = el("button", "link", "👤 " + (prof ? prof.name : "You")); pn.style.cssText = "font-size:14px;color:var(--tx)"; pn.onclick = () => { tab = "profile"; draw() };
-    const so = el("button", "link", "Sign out"); so.onclick = async () => { prof = null; await sb.auth.signOut() };
-    top.append(pn, document.createTextNode(" · " + (r === "admin" ? "Admin" : ROLES[r]) + " · "), so);
-    $("who").textContent = ""; $("who").append(top);
-    if (!al.length) { A.append(el("div", "card", "Your account is waiting for approval. Ask the admin to give you a role, then reload.")); return }
-    if (r === "child" && prof.kid_id) kid = prof.kid_id; else if (!kids.find(k => k.id === kid)) kid = kids[0] && kids[0].id;
+    const A = $("app"), sd = $("side");
+    A.textContent = "";
+    sd.textContent = "";
+    $("who").textContent = "";
+    const r = role(), al = ALLOW[r] || [];
+
+    // Keep account identity and sign-out available in the navigation drawer.
+    $("mb").style.display = "";
+    const account = el("div", "side-account");
+    account.append(
+        el("div", "side-account-name", prof?.name || me?.user_metadata?.name || "My account"),
+        el("div", "side-account-email", shown(me?.email || "")),
+        el("div", "side-account-role", r === "admin" ? "Administrator" : (ROLES[r] || r))
+    );
+    const actions = el("div", "side-account-actions");
+    if (al.includes("profile")) {
+        const profileButton = el("button", "side-account-link", "👤 Profile");
+        profileButton.onclick = () => {
+            tab = "profile";
+            sd.classList.remove("open");
+            $("ov").classList.remove("show");
+            draw();
+        };
+        actions.append(profileButton);
+    }
+    const signOutButton = el("button", "side-account-link sign-out", "↪ Sign out");
+    signOutButton.onclick = async () => {
+        signOutButton.disabled = true;
+        const { error } = await sb.auth.signOut();
+        if (error) {
+            signOutButton.disabled = false;
+            msg("Could not sign out: " + error.message);
+        }
+    };
+    actions.append(signOutButton);
+    account.append(actions);
+    sd.append(account);
+
+    if (!al.length) {
+        A.append(el("div", "card", "Your account is waiting for approval. Ask the admin to give you a role, then reload."));
+        return;
+    }
+
+    if (r === "child" && prof?.kid_id) kid = prof.kid_id;
+    else if (!kids.find(k => k.id === kid)) kid = kids[0] && kids[0].id;
     if (!al.includes(tab)) tab = al[0];
-    const sd = $("side"); $("mb").style.display = "";
-    al.forEach(k => { const b = el("button", k === tab ? "on" : "", TABS[k].n); b.onclick = () => { tab = k; sd.classList.remove("open"); $("ov").classList.remove("show"); draw() }; sd.append(b) });
-    if (r !== "child" && kids.length > 1 && tab !== "over" && tab !== "people" && tab !== "masters" && tab !== "profile") { const s = el("select"); kids.forEach(k => { const o = el("option", null, kl(k)); o.value = k.id; s.append(o) }); s.value = kid; s.style.width = "100%"; s.onchange = () => { kid = s.value; draw() }; A.append(s) }
+
+    // Person selection is relevant only to child-specific tracker sections.
+    const kidScopedTabs = ["money", "stars", "shop", "classes", "health", "rewards"];
+    if (r !== "child" && kids.length > 1 && kidScopedTabs.includes(tab)) {
+        const picker = el("div", "side-kid-picker");
+        picker.append(el("label", "side-kid-label", "Viewing"));
+        const select = el("select", "side-kid-select");
+        kids.forEach(k => {
+            const option = el("option", null, kl(k));
+            option.value = k.id;
+            select.append(option);
+        });
+        select.value = kid || "";
+        select.onchange = () => { kid = select.value; draw(); };
+        picker.append(select);
+        sd.append(picker);
+    }
+
+    sd.append(el("div", "side-divider"));
+    al.forEach(k => {
+        const b = el("button", k === tab ? "on" : "", TABS[k].n);
+        b.onclick = () => {
+            tab = k;
+            sd.classList.remove("open");
+            $("ov").classList.remove("show");
+            draw();
+        };
+        sd.append(b);
+    });
+
     const S = el("div", "card"), F = el("div", "card"), L = el("div", "card");
-    if (tab === "over") overview(S); else if (tab === "people") people(S, F, L); else if (tab === "masters") masterTab(S); else if (tab === "profile") profileTab(S); else if (tab === "rewards") rewardsTab(S, F, L, r); else if (tab === "expenses") expensesTab(S, F, L, r); else if (tab === "family") familyDevicesTab(S, F, L); else if (tab === "resources") resourcesTab(S, F, L); else entries(S, F, L, r);
-    [S, F, L].forEach(x => { if (x.childNodes.length) A.append(x) });
+    if (tab === "over") overview(S);
+    else if (tab === "people") people(S, F, L);
+    else if (tab === "masters") masterTab(S);
+    else if (tab === "profile") profileTab(S);
+    else if (tab === "rewards") rewardsTab(S, F, L, r);
+    else if (tab === "expenses") expensesTab(S, F, L, r);
+    else if (tab === "family") familyDevicesTab(S, F, L);
+    else if (tab === "resources") resourcesTab(S, F, L);
+    else entries(S, F, L, r);
+    [S, F, L].forEach(x => { if (x.childNodes.length) A.append(x); });
 }
 let ovKid = null;
 function overview(S) {
