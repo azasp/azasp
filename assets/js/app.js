@@ -49,6 +49,16 @@ function draw() {
         return;
     }
 
+    // Show the live database quota status across all admin pages.
+    if (r === "admin") {
+        renderGlobalResourceNotice(A);
+        if (!resourceMetricsCache || Date.now() - resourceMetricsCacheAt >= RESOURCE_METRICS_TTL_MS) {
+            refreshResourceMetrics(false).then(() => {
+                if (role() === "admin" && !busy) draw();
+            });
+        }
+    }
+
     if (r === "child" && prof?.kid_id) kid = prof.kid_id;
     else if (!kids.find(k => k.id === kid)) kid = kids[0] && kids[0].id;
     if (!al.includes(tab)) tab = al[0];
